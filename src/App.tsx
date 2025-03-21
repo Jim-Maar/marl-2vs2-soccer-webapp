@@ -1,7 +1,7 @@
 import React from 'react';
 import './App.css';
 import PhysicsSimulation from './components/PhysicsSimulation';
-// import OnnxModel from './components/OnnxModel';
+import OnnxModel from './components/OnnxModel';
 
 function App() {
   return (
@@ -9,7 +9,7 @@ function App() {
       <h1>React + TypeScript + Vite + Box2D + ONNX</h1>
       <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
         <PhysicsSimulation />
-        {/* <OnnxModel /> */}
+        <OnnxModel />
       </div>
     </div>
   );
