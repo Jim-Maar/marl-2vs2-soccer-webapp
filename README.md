@@ -1,54 +1,56 @@
-# React + TypeScript + Vite
+# 2vs2 Soccer Game with AI Agents
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+A physics-based soccer simulation game where players can play as one of four soccer agents, either controlled by humans or AI.
 
-Currently, two official plugins are available:
+## Features
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react/README.md) uses [Babel](https://babeljs.io/) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+- 2vs2 top-down soccer game with realistic physics using Box2D
+- Multiple control options for players (WASD, IJKL, Arrow keys, Numpad)
+- AI agents trained with reinforcement learning (using ONNX models)
+- Real-time scoring and gameplay
+- Interactive UI for selecting player controls
 
-## Expanding the ESLint configuration
+## Technology Stack
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+- React
+- TypeScript
+- Box2D (WebAssembly)
+- ONNX Runtime Web
 
-```js
-export default tseslint.config({
-  extends: [
-    // Remove ...tseslint.configs.recommended and replace with this
-    ...tseslint.configs.recommendedTypeChecked,
-    // Alternatively, use this for stricter rules
-    ...tseslint.configs.strictTypeChecked,
-    // Optionally, add this for stylistic rules
-    ...tseslint.configs.stylisticTypeChecked,
-  ],
-  languageOptions: {
-    // other options...
-    parserOptions: {
-      project: ['./tsconfig.node.json', './tsconfig.app.json'],
-      tsconfigRootDir: import.meta.dirname,
-    },
-  },
-})
-```
+## Getting Started
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+### Prerequisites
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+- Node.js (version 14 or newer)
+- npm (version 6 or newer)
 
-export default tseslint.config({
-  plugins: {
-    // Add the react-x and react-dom plugins
-    'react-x': reactX,
-    'react-dom': reactDom,
-  },
-  rules: {
-    // other rules...
-    // Enable its recommended typescript rules
-    ...reactX.configs['recommended-typescript'].rules,
-    ...reactDom.configs.recommended.rules,
-  },
-})
-```
+### Installation
+
+1. Clone the repository
+2. Install dependencies:
+   ```
+   npm install
+   ```
+3. Start the development server:
+   ```
+   npm run dev
+   ```
+
+## How to Play
+
+1. Select controls for each player using the dropdown menus
+2. Click "Start Game" to begin playing
+3. Control your player using the selected control scheme
+4. Score by getting the ball into the opponent's goal
+
+## Controls
+
+- **WASD**: W (up), A (left), S (down), D (right)
+- **IJKL**: I (up), J (left), K (down), L (right)
+- **Arrows**: Arrow keys for movement
+- **Numpad**: 8 (up), 4 (left), 5 (down), 6 (right)
+- **AI Model**: Player controlled by AI
+
+## License
+
+MIT
