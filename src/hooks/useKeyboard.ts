@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useRef, useEffect, useCallback } from "react";
 import {
   UP, DOWN, LEFT, RIGHT,
   UP_LEFT, UP_RIGHT, DOWN_LEFT, DOWN_RIGHT, NO_OP,
@@ -17,7 +17,12 @@ export enum KeyboardControlType {
 
 type KeyPressMap = Record<string, boolean>;
 
-const getActionFromKeys = (keys: KeyPressMap, controlType: KeyboardControlType): number => {
+const getActionFromKeys = (keys: KeyPressMap | null, controlType: KeyboardControlType): number => {
+  // If keys is null or undefined, return NO_OP
+  if (!keys) {
+    return NO_OP;
+  }
+
   // Different control schemes based on the type
   let upKey = "";
   let downKey = "";
@@ -84,16 +89,17 @@ const getActionFromKeys = (keys: KeyPressMap, controlType: KeyboardControlType):
 
 // Hook for handling keyboard controls
 export const useKeyboard = () => {
-  const [keyMap, setKeyMap] = useState<KeyPressMap>({});
+  // Use ref instead of state to avoid re-renders on key press
+  const keyMapRef = useRef<KeyPressMap>({});
 
   // Set up key event listeners
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      setKeyMap((prev) => ({ ...prev, [e.code]: true }));
+      keyMapRef.current[e.code] = true;
     };
 
     const handleKeyUp = (e: KeyboardEvent) => {
-      setKeyMap((prev) => ({ ...prev, [e.code]: false }));
+      keyMapRef.current[e.code] = false;
     };
 
     window.addEventListener("keydown", handleKeyDown);
@@ -105,14 +111,14 @@ export const useKeyboard = () => {
     };
   }, []);
 
-  // Get actions for different control schemes
-  const getWASDAction = () => getActionFromKeys(keyMap, KeyboardControlType.WASD);
-  const getIJKLAction = () => getActionFromKeys(keyMap, KeyboardControlType.IJKL);
-  const getArrowsAction = () => getActionFromKeys(keyMap, KeyboardControlType.ARROWS);
-  const getNumpadAction = () => getActionFromKeys(keyMap, KeyboardControlType.NUMPAD);
+  // Use useCallback to ensure these functions have stable references
+  const getWASDAction = useCallback(() => getActionFromKeys(keyMapRef.current, KeyboardControlType.WASD), []);
+  const getIJKLAction = useCallback(() => getActionFromKeys(keyMapRef.current, KeyboardControlType.IJKL), []);
+  const getArrowsAction = useCallback(() => getActionFromKeys(keyMapRef.current, KeyboardControlType.ARROWS), []);
+  const getNumpadAction = useCallback(() => getActionFromKeys(keyMapRef.current, KeyboardControlType.NUMPAD), []);
 
   return {
-    keyMap,
+    keyMap: keyMapRef.current, // For backwards compatibility
     getWASDAction,
     getIJKLAction,
     getArrowsAction,

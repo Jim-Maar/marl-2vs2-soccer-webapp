@@ -1,6 +1,6 @@
 // Soccer Game Constants
 
-// Screen dimensions
+// Screen dimensions - updated to match game aspect ratio
 export const SCREEN_WIDTH = 800;
 export const SCREEN_HEIGHT = 600;
 
@@ -8,8 +8,8 @@ export const SCREEN_HEIGHT = 600;
 export const GAME_WIDTH = 30;
 export const GAME_HEIGHT = 40;
 
-// Conversion factor
-export const PPM = SCREEN_WIDTH / GAME_WIDTH; // pixels per meter
+// Conversion factor - ensuring proper scaling for horizontal view
+export const PPM = Math.min(SCREEN_WIDTH / GAME_WIDTH, SCREEN_HEIGHT / GAME_HEIGHT);
 
 // Game parameters
 export const FPS = 20;

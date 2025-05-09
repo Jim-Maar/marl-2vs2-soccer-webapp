@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
-import { initBox2D, SoccerWorldFactory } from '../models/Box2DFactory';
+import { initBox2D, SoccerWorldManager, Helpers } from '../models/Box2DFactory';
 import { useGameLoop } from '../hooks/useGameLoop';
 import { useKeyboard } from '../hooks/useKeyboard';
 import { useOnnxModel } from '../hooks/useOnnxModel';
@@ -37,6 +37,7 @@ import { Box2DType, GameState, PlayerData } from '../types';
 class CanvasDebugDraw {
   constructor(
     private readonly box2D: Box2DType,
+    private readonly helpers: Helpers,
     private readonly context: CanvasRenderingContext2D,
     private readonly pixelsPerMeter: number
   ) {}
@@ -95,6 +96,7 @@ class CanvasDebugDraw {
   
   drawCircle = (center_p: number, radius: number, axis_p: number, fill: boolean): void => {
     const { wrapPointer, b2Vec2 } = this.box2D;
+    const { copyVec2, scaledVec2 } = this.helpers;
     const centerV = wrapPointer(center_p, b2Vec2);
     const axisV = wrapPointer(axis_p, b2Vec2);
     
@@ -106,13 +108,12 @@ class CanvasDebugDraw {
     this.context.stroke();
     
     if (fill) {
-      // Render axis marker
-      const vert2V = wrapPointer(center_p, b2Vec2);
-      const x = centerV.get_x() + axisV.get_x() * radius;
-      const y = centerV.get_y() + axisV.get_y() * radius;
+      // Render axis marker - fixed to use helper functions
+      const vert2V = copyVec2(centerV);
+      vert2V.op_add(scaledVec2(axisV, radius));
       this.context.beginPath();
       this.context.moveTo(centerV.get_x(), centerV.get_y());
-      this.context.lineTo(x, y);
+      this.context.lineTo(vert2V.get_x(), vert2V.get_y());
       this.context.stroke();
     }
   };
@@ -189,17 +190,23 @@ const SoccerGame: React.FC<SoccerGameProps> = ({
 }) => {
   // References
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const worldFactoryRef = useRef<SoccerWorldFactory | null>(null);
+  const worldManagerRef = useRef<SoccerWorldManager | null>(null);
   const box2dRef = useRef<Box2DType | null>(null);
   const debugDrawRef = useRef<Box2D.JSDraw | null>(null);
   const prevIsRunningRef = useRef(isRunning);
-  const animationRef = useRef<number | null>(null);
+  const rafRef = useRef<number | null>(null);
+  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const previousTimeRef = useRef<number | null>(null);
+  const accumulatorRef = useRef<number>(0);
+  const fpsCounterRef = useRef<{ frames: number; time: number }>({ frames: 0, time: 0 });
   
   // State
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [score, setScore] = useState<[number, number]>([0, 0]);
   const [fps, setFps] = useState<number>(0);
+
+  console.log("SoccerGame: Rerendering");
   
   // ONNX Models
   const { 
@@ -215,203 +222,9 @@ const SoccerGame: React.FC<SoccerGameProps> = ({
   // Keyboard controls
   const { getWASDAction, getIJKLAction, getArrowsAction, getNumpadAction } = useKeyboard();
   
-  // Initialize Box2D and set up the game
-  useEffect(() => {
-    const init = async () => {
-      try {
-        setLoading(true);
-        
-        // Initialize Box2D
-        console.log("SoccerGame: Loading Box2D...");
-        const [box2d, helpers, worldFactory] = await initBox2D();
-        console.log("SoccerGame: Box2D initialized successfully");
-        box2dRef.current = box2d;
-        worldFactoryRef.current = worldFactory;
-        
-        setLoading(false);
-      } catch (err) {
-        console.error('Failed to initialize game:', err);
-        setError(`Game initialization failed: ${err instanceof Error ? err.message : String(err)}`);
-        setLoading(false);
-      }
-    };
-    
-    init();
-    
-    // Cleanup when component unmounts
-    return () => {
-      if (animationRef.current) {
-        cancelAnimationFrame(animationRef.current);
-        animationRef.current = null;
-      }
-      if (worldFactoryRef.current) {
-        worldFactoryRef.current.destroy();
-      }
-    };
-  }, []);
-  
-  // Set up canvas and debug draw
-  useEffect(() => {
-    if (loading || error || !canvasRef.current || !box2dRef.current || !worldFactoryRef.current) return;
-    
-    const canvas = canvasRef.current;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) {
-      console.error('SoccerGame: Failed to get 2D context from canvas');
-      return;
-    }
-    
-    const box2d = box2dRef.current;
-    
-    // Canvas setup - following PhysicsSimulation.tsx
-    const pixelsPerMeter = PPM;
-    const canvasOffset = {
-      x: canvas.width / 2,
-      y: canvas.height / 2
-    };
-    
-    // Create debug draw
-    const debugDraw = new CanvasDebugDraw(box2d, ctx, pixelsPerMeter).constructJSDraw();
-    debugDraw.SetFlags(box2d.b2Draw.e_shapeBit);
-    debugDrawRef.current = debugDraw;
-    
-    // Set debug draw on world
-    const worldFactory = worldFactoryRef.current;
-    worldFactory.setDebugDraw(debugDraw);
-    
-    console.log('SoccerGame: Debug draw set up on world factory');
-    
-    // Set up new game when isRunning changes
-    if (isRunning && prevIsRunningRef.current !== isRunning) {
-      setupGame();
-    }
-    
-    // Drawing function
-    const drawCanvas = () => {
-      // Black background
-      ctx.fillStyle = BLACK;
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-      
-      ctx.save();
-      
-      // Transform like PhysicsSimulation.tsx
-      ctx.translate(canvasOffset.x, canvasOffset.y);
-      ctx.scale(pixelsPerMeter, -pixelsPerMeter); // Flip Y axis
-      ctx.lineWidth /= pixelsPerMeter;
-      
-      // Draw world using Box2D debug draw
-      worldFactory.draw();
-      
-      ctx.restore();
-      
-      // Draw score directly on screen
-      ctx.fillStyle = WHITE;
-      ctx.font = '24px Arial';
-      ctx.textAlign = 'center';
-      ctx.fillText(`Red ${score[0]} - ${score[1]} Blue`, canvas.width / 2, 30);
-      
-      // Draw FPS
-      ctx.fillStyle = WHITE;
-      ctx.font = '12px Arial';
-      ctx.textAlign = 'left';
-      ctx.fillText(`FPS: ${fps}`, 10, 20);
-    };
-    
-    // Store the draw function for the animation loop
-    const animateFrame = (prevTime: number = performance.now()) => {
-      const currentTime = performance.now();
-      const deltaTime = (currentTime - prevTime) / 1000; // Convert to seconds
-      
-      if (isRunning && worldFactoryRef.current) {
-        // Get actions and process AI
-        processActions();
-        
-        // Step the world
-        worldFactoryRef.current.step(deltaTime);
-        
-        // Check for goals
-        checkGoal();
-      }
-      
-      // Draw the canvas
-      drawCanvas();
-      
-      // Calculate FPS
-      setFps(Math.round(1 / deltaTime));
-      
-      // Request next frame
-      animationRef.current = requestAnimationFrame(() => animateFrame(currentTime));
-    };
-    
-    // Start animation
-    if (!animationRef.current) {
-      animationRef.current = requestAnimationFrame(() => animateFrame());
-    }
-    
-    return () => {
-      if (animationRef.current) {
-        cancelAnimationFrame(animationRef.current);
-        animationRef.current = null;
-      }
-    };
-  }, [loading, error, isRunning]);
-  
-  // Set up a new game
-  const setupGame = useCallback(() => {
-    console.log('SoccerGame: Setting up new game');
-    if (!worldFactoryRef.current) {
-      console.log('SoccerGame: worldFactory is null, cannot set up game');
-      return;
-    }
-    
-    // Create world
-    worldFactoryRef.current.createWorld();
-    
-    // Create boundaries
-    worldFactoryRef.current.createBoundaries(
-      GAME_WIDTH, 
-      GAME_HEIGHT, 
-      WALL_THICKNESS, 
-      GOAL_WIDTH
-    );
-    
-    // Create players
-    worldFactoryRef.current.createPlayers(
-      GAME_WIDTH,
-      GAME_HEIGHT,
-      PLAYER_SIZE,
-      SPAWNING_RADIUS,
-      PLAYER_DENSITY,
-      PLAYER_FRICTION
-    );
-    
-    // Create ball
-    worldFactoryRef.current.createBall(
-      GAME_WIDTH,
-      GAME_HEIGHT,
-      BALL_RADIUS,
-      BALL_DENSITY,
-      BALL_FRICTION,
-      BALL_RESTITUTION
-    );
-    
-    // Reset score
-    setScore([0, 0]);
-    
-    console.log('SoccerGame: Game setup complete');
-  }, []);
-  
-  // Reset the game (after a goal)
-  const resetGame = useCallback(() => {
-    if (!worldFactoryRef.current) return;
-    
-    // Reset ball position
-    worldFactoryRef.current.resetBall(GAME_WIDTH, GAME_HEIGHT);
-  }, []);
-  
   // Process player actions
   const processActions = useCallback(() => {
-    if (!worldFactoryRef.current || !isRunning) return;
+    if (!worldManagerRef.current || !isRunning) return;
     
     const actions: number[] = [];
     
@@ -447,7 +260,7 @@ const SoccerGame: React.FC<SoccerGameProps> = ({
     for (let i = 0; i < 4; i++) {
       const controlType = playerControls[i];
       if (controlType !== ControlType.AI1 && controlType !== ControlType.AI2) {
-        worldFactoryRef.current.applyPlayerAction(i, actions[i], PLAYER_SPEED);
+        worldManagerRef.current.applyPlayerAction(i, actions[i], PLAYER_SPEED);
       }
     }
     
@@ -457,9 +270,9 @@ const SoccerGame: React.FC<SoccerGameProps> = ({
   
   // Process AI actions
   const processAIActions = useCallback(async () => {
-    if (!worldFactoryRef.current || !areModelsReady) return;
+    if (!worldManagerRef.current || !areModelsReady) return;
     
-    const state = worldFactoryRef.current.getGameState(GAME_WIDTH, GAME_HEIGHT);
+    const state = worldManagerRef.current.getGameState(GAME_WIDTH, GAME_HEIGHT);
     if (!state) return;
     
     // Process each player
@@ -488,7 +301,7 @@ const SoccerGame: React.FC<SoccerGameProps> = ({
           const aiAction = await getAIAction(observation, modelNumber);
           
           // Apply the action
-          worldFactoryRef.current.applyPlayerAction(i, aiAction, PLAYER_SPEED);
+          worldManagerRef.current.applyPlayerAction(i, aiAction, PLAYER_SPEED);
         } catch (err) {
           console.error(`Error getting AI action for player ${i}:`, err);
         }
@@ -498,21 +311,292 @@ const SoccerGame: React.FC<SoccerGameProps> = ({
   
   // Check for goals
   const checkGoal = useCallback(() => {
-    if (!worldFactoryRef.current) return;
+    if (!worldManagerRef.current) return;
     
-    const goalScored = worldFactoryRef.current.checkGoal(GAME_HEIGHT);
+    const goalScored = worldManagerRef.current.checkGoal(GAME_HEIGHT);
     if (goalScored !== -1) {
       // Update score
       const newScore: [number, number] = [...score];
       if (goalScored === 0 || goalScored === 1) {
-        newScore[goalScored] += 1;
+        // Red team scored
+        newScore[0] += 1;
+      } else {
+        // Blue team scored
+        newScore[1] += 1;
       }
       setScore(newScore);
       
-      // Reset ball position
+      // Reset game state
       resetGame();
+      
+      // Call onScoreUpdate callback if provided
+      if (onScoreUpdate) {
+        onScoreUpdate(newScore);
+      }
     }
-  }, [score, resetGame]);
+  }, [score, onScoreUpdate]);
+  
+  // Reset the game (after a goal)
+  const resetGame = useCallback(() => {
+    if (!worldManagerRef.current) return;
+    
+    // Reset ball position
+    worldManagerRef.current.resetBall(GAME_WIDTH, GAME_HEIGHT);
+    
+    // Reset player positions
+    worldManagerRef.current.resetPlayers(
+      GAME_WIDTH,
+      GAME_HEIGHT,
+      PLAYER_SIZE,
+      SPAWNING_RADIUS
+    );
+  }, []);
+  
+  // Set up a new game
+  const setupGame = useCallback(() => {
+    console.log('SoccerGame: Setting up new game');
+    if (!worldManagerRef.current) {
+      console.log('SoccerGame: worldManager is null, cannot set up game');
+      return;
+    }
+    
+    // Create world
+    worldManagerRef.current.createWorld();
+    
+    // Create boundaries
+    worldManagerRef.current.createBoundaries(
+      GAME_WIDTH, 
+      GAME_HEIGHT, 
+      WALL_THICKNESS, 
+      GOAL_WIDTH
+    );
+    
+    // Create players
+    worldManagerRef.current.createPlayers(
+      GAME_WIDTH,
+      GAME_HEIGHT,
+      PLAYER_SIZE,
+      SPAWNING_RADIUS,
+      PLAYER_DENSITY,
+      PLAYER_FRICTION
+    );
+    
+    // Create ball
+    worldManagerRef.current.createBall(
+      GAME_WIDTH,
+      GAME_HEIGHT,
+      BALL_RADIUS,
+      BALL_DENSITY,
+      BALL_FRICTION,
+      BALL_RESTITUTION
+    );
+    
+    // Reset score
+    setScore([0, 0]);
+    
+    console.log('SoccerGame: Game setup complete');
+  }, []);
+  
+  // Initialize Box2D and create a world manager
+  useEffect(() => {
+    const init = async () => {
+      try {
+        console.log('SoccerGame: Initializing Box2D');
+        // Load Box2D
+        setLoading(true);
+        
+        // Initialize Box2D
+        console.log("SoccerGame: Loading Box2D...");
+        const [box2d, helpers, worldManager] = await initBox2D();
+        console.log("SoccerGame: Box2D initialized successfully");
+        box2dRef.current = box2d;
+        worldManagerRef.current = worldManager;
+        
+        setLoading(false);
+      } catch (err) {
+        console.error('SoccerGame: Error initializing Box2D:', err);
+        setError('Failed to initialize physics engine. Please refresh the page.');
+        setLoading(false);
+      }
+    };
+    
+    init();
+    
+    // Clean up references
+    return () => {
+      if (rafRef.current) {
+        cancelAnimationFrame(rafRef.current);
+        rafRef.current = null;
+      }
+      
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+        timeoutRef.current = null;
+      }
+      
+      if (worldManagerRef.current) {
+        try {
+          // Ensure all Box2D resources are properly cleaned up
+          console.log('SoccerGame: Cleaning up Box2D resources');
+          worldManagerRef.current.destroy();
+          worldManagerRef.current = null;
+        } catch (e) {
+          console.error('Error destroying world manager:', e);
+        }
+      }
+      
+      // Clear other refs
+      box2dRef.current = null;
+      debugDrawRef.current = null;
+    };
+  }, []);
+  
+  // Set up canvas and debug draw
+  useEffect(() => {
+    if (loading || error || !canvasRef.current || !box2dRef.current || !worldManagerRef.current) return;
+    
+    const canvas = canvasRef.current;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) {
+      console.error('SoccerGame: Failed to get 2D context from canvas');
+      return;
+    }
+    
+    const box2d = box2dRef.current;
+    
+    // Create helpers instance
+    const helpers = new Helpers(box2d);
+    
+    // Canvas setup
+    const pixelsPerMeter = PPM;
+    
+    // Create debug draw
+    const debugDraw = new CanvasDebugDraw(box2d, helpers, ctx, pixelsPerMeter).constructJSDraw();
+    debugDraw.SetFlags(box2d.b2Draw.e_shapeBit);
+    debugDrawRef.current = debugDraw;
+    
+    // Set debug draw on world
+    const worldManager = worldManagerRef.current;
+    worldManager.setDebugDraw(debugDraw);
+    
+    console.log('SoccerGame: Debug draw set up on world manager');
+    
+    // Set up new game when isRunning changes
+    if (isRunning && prevIsRunningRef.current !== isRunning) {
+      setupGame();
+    }
+    
+    // Draw the canvas function
+    const drawCanvas = () => {
+      // Black background
+      ctx.fillStyle = BLACK;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      
+      ctx.save();
+      
+      // Transform to match CanvasRenderer
+      ctx.translate(0, canvas.height);
+      ctx.scale(pixelsPerMeter, -pixelsPerMeter);
+      ctx.lineWidth /= pixelsPerMeter;
+      
+      // Draw world using Box2D debug draw
+      worldManager.draw();
+      
+      ctx.restore();
+      
+      // Draw score directly on screen
+      ctx.fillStyle = WHITE;
+      ctx.font = '24px Arial';
+      ctx.textAlign = 'center';
+      ctx.fillText(`Red ${score[0]} - ${score[1]} Blue`, canvas.width / 2, 30);
+      
+      // Draw FPS
+      ctx.fillStyle = WHITE;
+      ctx.font = '12px Arial';
+      ctx.textAlign = 'left';
+      ctx.fillText(`FPS: ${fps}`, 10, 20);
+    };
+    
+    // Animation loop with fixed timestep
+    const animateFrame = (currentTime: number = performance.now()) => {
+      if (!previousTimeRef.current) {
+        previousTimeRef.current = currentTime;
+        rafRef.current = requestAnimationFrame(animateFrame);
+        return;
+      }
+      
+      // Calculate elapsed time since last frame
+      const deltaMs = currentTime - previousTimeRef.current;
+      previousTimeRef.current = currentTime;
+      
+      // Cap delta time to avoid spiral of death if tab was in background
+      const cappedDeltaMs = Math.min(deltaMs, 200);
+      
+      // Add elapsed time to accumulator
+      accumulatorRef.current += cappedDeltaMs;
+      
+      // Fixed time step in milliseconds
+      const fixedTimeStepMs = 1000 / FPS;
+      
+      // Track FPS
+      fpsCounterRef.current.frames++;
+      fpsCounterRef.current.time += deltaMs;
+      if (fpsCounterRef.current.time >= 1000) {
+        setFps(Math.round(fpsCounterRef.current.frames * 1000 / fpsCounterRef.current.time));
+        fpsCounterRef.current.frames = 0;
+        fpsCounterRef.current.time = 0;
+      }
+      
+      // Run physics updates in fixed time steps
+      let updatesPerformed = 0;
+      while (accumulatorRef.current >= fixedTimeStepMs && updatesPerformed < 5) {
+        if (isRunning && worldManagerRef.current) {
+          // Get actions and process AI
+          processActions();
+          
+          // Step the world with a fixed time step for consistent physics
+          worldManagerRef.current.step(fixedTimeStepMs);
+          
+          // Check for goals
+          checkGoal();
+        }
+        
+        // Subtract fixed time step from accumulator
+        accumulatorRef.current -= fixedTimeStepMs;
+        updatesPerformed++;
+      }
+      
+      // If we're still behind after max updates, reset accumulator to avoid spiral of death
+      if (updatesPerformed >= 5 && accumulatorRef.current >= fixedTimeStepMs) {
+        console.warn('SoccerGame: Too many physics updates needed, resetting accumulator');
+        accumulatorRef.current = 0;
+      }
+      
+      // Draw the canvas (happens every frame regardless of physics updates)
+      drawCanvas();
+      
+      // Request next frame immediately
+      rafRef.current = requestAnimationFrame(animateFrame);
+    };
+    
+    // Start animation
+    if (!rafRef.current) {
+      rafRef.current = requestAnimationFrame(animateFrame);
+    }
+    
+    return () => {
+      if (rafRef.current) {
+        cancelAnimationFrame(rafRef.current);
+        rafRef.current = null;
+      }
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+        timeoutRef.current = null;
+      }
+      previousTimeRef.current = null;
+      accumulatorRef.current = 0;
+    };
+  }, [loading, error, isRunning, prevIsRunningRef, setupGame, processActions, checkGoal, score, fps]);
   
   // Handle game starting/stopping
   useEffect(() => {
@@ -523,25 +607,28 @@ const SoccerGame: React.FC<SoccerGameProps> = ({
     }
     
     if (isRunning) {
-      if (!worldFactoryRef.current) {
+      if (!worldManagerRef.current) {
         setupGame();
       } else {
-        const state = worldFactoryRef.current.getGameState(GAME_WIDTH, GAME_HEIGHT);
+        const state = worldManagerRef.current.getGameState(GAME_WIDTH, GAME_HEIGHT);
         const hasPlayers = state && state.players.length > 0;
         
         if (!hasPlayers) {
           setupGame();
         }
       }
+    } else {
+      // Clean up animation when game is paused
+      if (rafRef.current) {
+        cancelAnimationFrame(rafRef.current);
+        rafRef.current = null;
+      }
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+        timeoutRef.current = null;
+      }
     }
   }, [isRunning, setupGame]);
-  
-  // Handle score update
-  useEffect(() => {
-    if (onScoreUpdate) {
-      onScoreUpdate(score);
-    }
-  }, [score, onScoreUpdate]);
   
   // Combine all error states
   const combinedError = error || modelError;
@@ -576,6 +663,8 @@ const SoccerGame: React.FC<SoccerGameProps> = ({
           border: 2px solid #333;
           border-radius: 4px;
           background-color: #000;
+          max-width: 100%;
+          height: auto;
         }
         
         .loading, .error {

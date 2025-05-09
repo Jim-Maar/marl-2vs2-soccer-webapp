@@ -1,5 +1,6 @@
 import Box2DFactory from 'box2d-wasm';
 import { Box2DType, Point } from '../types';
+import { FPS } from '../utils/constants';
 
 // Helper class for Box2D operations
 export class Helpers {
@@ -43,8 +44,8 @@ export class Helpers {
   };
 }
 
-// Soccer world factory to create and manage physics for the soccer game
-export class SoccerWorldFactory {
+// Soccer world manager to create and manage physics for the soccer game
+export class SoccerWorldManager {
   private world: Box2D.b2World | null = null;
   private players: Box2D.b2Body[] = [];
   private ball: Box2D.b2Body | null = null;
@@ -60,6 +61,12 @@ export class SoccerWorldFactory {
     const { b2World, b2Vec2 } = this.box2D;
     // Create physics world with no gravity
     this.world = new b2World(new b2Vec2(0.0, 0.0));
+    
+    // Set debug draw immediately if available
+    if (this.debugDraw) {
+      this.world.SetDebugDraw(this.debugDraw);
+    }
+    
     return this.world;
   }
 
@@ -151,6 +158,7 @@ export class SoccerWorldFactory {
       const bodyDef = new b2BodyDef();
       bodyDef.set_type(b2_dynamicBody);
       bodyDef.set_position(new b2Vec2(boundedX, boundedY));
+      bodyDef.set_fixedRotation(true); // Prevent rotation
       
       const body = this.world.CreateBody(bodyDef);
       
@@ -164,7 +172,7 @@ export class SoccerWorldFactory {
       fixtureDef.set_friction(playerFriction);
       
       body.CreateFixture(fixtureDef);
-      body.SetLinearDamping(0.5); // Add some damping for more realistic movement
+      // body.SetLinearDamping(0.5); // Add some damping for more realistic movement
       
       // Add user data - use type assertion since this is how Box2D works
       (body as any).userData = { team: Math.floor(i / 2), id: i };
@@ -184,6 +192,7 @@ export class SoccerWorldFactory {
     const bodyDef = new b2BodyDef();
     bodyDef.set_type(b2_dynamicBody);
     bodyDef.set_position(new b2Vec2(gameWidth/2, gameHeight/2));
+    bodyDef.set_fixedRotation(true); // Prevent rotation
     
     this.ball = this.world.CreateBody(bodyDef);
     
@@ -214,6 +223,36 @@ export class SoccerWorldFactory {
     this.ball.SetTransform(new b2Vec2(gameWidth/2, gameHeight/2), 0);
     this.ball.SetLinearVelocity(new b2Vec2(0, 0));
     this.ball.SetAngularVelocity(0);
+  }
+
+  resetPlayers(gameWidth: number, gameHeight: number, playerSize: number, spawningRadius: number) {
+    if (!this.players || this.players.length === 0) return;
+    
+    const { b2Vec2 } = this.box2D;
+    
+    // Default positions
+    const defaultPositions = [
+      { x: gameWidth/4, y: gameHeight/6 },          // Team 0 - Player 0 (bottom left)
+      { x: 3*gameWidth/4, y: gameHeight/6 },        // Team 0 - Player 1 (bottom right)
+      { x: gameWidth/4, y: 5*gameHeight/6 },        // Team 1 - Player 2 (top left)
+      { x: 3*gameWidth/4, y: 5*gameHeight/6 },      // Team 1 - Player 3 (top right)
+    ];
+    
+    // Reset each player
+    for (let i = 0; i < this.players.length; i++) {
+      // Add randomness to positions within spawning radius
+      const randomX = defaultPositions[i].x + (Math.random() * 2 - 1) * spawningRadius;
+      const randomY = defaultPositions[i].y + (Math.random() * 2 - 1) * spawningRadius;
+      
+      // Ensure players stay within bounds
+      const boundedX = Math.max(playerSize, Math.min(gameWidth - playerSize, randomX));
+      const boundedY = Math.max(playerSize, Math.min(gameHeight - playerSize, randomY));
+      
+      // Reset position and velocity
+      this.players[i].SetTransform(new b2Vec2(boundedX, boundedY), 0);
+      this.players[i].SetLinearVelocity(new b2Vec2(0, 0));
+      this.players[i].SetAngularVelocity(0);
+    }
   }
 
   applyPlayerAction(playerIndex: number, action: number, playerSpeed: number) {
@@ -364,30 +403,47 @@ export class SoccerWorldFactory {
     return -1;  // No goal
   }
 
-  step(deltaTime: number) {
+  step(deltaMs: number) {
     if (!this.world) return;
-    this.world.Step(deltaTime, 6, 2);
+    
+    // Use FPS constant to calculate max time step
+    const maxTimeStepMs = 1000 / FPS; // Convert FPS to ms per frame
+    const clampedDeltaMs = Math.min(deltaMs, maxTimeStepMs);
+    
+    // Convert ms to seconds for Box2D
+    this.world.Step(clampedDeltaMs/1000, 6, 2);
   }
 
   destroy() {
     if (this.world) {
-      this.players.forEach(player => {
-        this.world?.DestroyBody(player);
-      });
-      
-      if (this.ball) {
-        this.world.DestroyBody(this.ball);
+      try {
+        // Clean up bodies first
+        this.players.forEach(player => {
+          if (player && this.world) {
+            this.world.DestroyBody(player);
+          }
+        });
+        
+        if (this.ball && this.world) {
+          this.world.DestroyBody(this.ball);
+        }
+        
+        if (this.groundBody && this.world) {
+          this.world.DestroyBody(this.groundBody);
+        }
+        
+        // Destroy the world
+        this.box2D.destroy(this.world);
+        
+        // Clear references
+        this.world = null;
+        this.players = [];
+        this.ball = null;
+        this.groundBody = null;
+        this.debugDraw = null;
+      } catch (e) {
+        console.error("Error destroying SoccerWorldManager:", e);
       }
-      
-      if (this.groundBody) {
-        this.world.DestroyBody(this.groundBody);
-      }
-      
-      this.box2D.destroy(this.world);
-      this.world = null;
-      this.players = [];
-      this.ball = null;
-      this.groundBody = null;
     }
   }
 
@@ -412,7 +468,7 @@ export class SoccerWorldFactory {
 }
 
 // Initialize Box2D
-export const initBox2D = async (): Promise<[Box2DType, Helpers, SoccerWorldFactory]> => {
+export const initBox2D = async (): Promise<[Box2DType, Helpers, SoccerWorldManager]> => {
   try {
     console.log('Box2DFactory: Starting Box2D initialization');
     const box2d = await Box2DFactory({
@@ -425,10 +481,10 @@ export const initBox2D = async (): Promise<[Box2DType, Helpers, SoccerWorldFacto
     
     console.log('Box2DFactory: Box2D WASM loaded successfully');
     const helpers = new Helpers(box2d);
-    const worldFactory = new SoccerWorldFactory(box2d, helpers);
+    const worldManager = new SoccerWorldManager(box2d, helpers);
     
     console.log('Box2DFactory: Initialization complete');
-    return [box2d, helpers, worldFactory];
+    return [box2d, helpers, worldManager];
   } catch (error) {
     console.error('Failed to initialize Box2D:', error);
     throw error;

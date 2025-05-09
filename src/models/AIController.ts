@@ -36,7 +36,7 @@ export class AIController {
   }
 
   // Get action from AI model
-  async getAction(observation: Observation, modelNumber: 1 | 2 = 1): Promise<number> {
+  async getAction(observation: Observation, modelNumber: 1 | 2 = 1, useSoftmax: boolean = false): Promise<number> {
     const session = modelNumber === 1 ? this.session1 : this.session2;
     
     if (!session) {
@@ -58,12 +58,52 @@ export class AIController {
       const output = results[session.outputNames[0]];
       const outputData = output.data as Float32Array;
       
-      // Get action with highest probability
-      return Array.from(outputData).indexOf(Math.max(...Array.from(outputData)));
+      if (useSoftmax) {
+        // Use softmax sampling
+        return this.softmaxSampling(Array.from(outputData));
+      } else {
+        // Get action with highest probability (argmax)
+        return Array.from(outputData).indexOf(Math.max(...Array.from(outputData)));
+      }
     } catch (err) {
       console.error('Error running inference:', err);
       return 8; // NO_OP as fallback
     }
+  }
+
+  // Softmax sampling implementation
+  private softmaxSampling(logits: number[]): number {
+    // Apply softmax to convert logits to probabilities
+    const probabilities = this.softmax(logits);
+    
+    // Sample from the probability distribution
+    const randomValue = Math.random();
+    let cumulativeProbability = 0;
+    
+    for (let i = 0; i < probabilities.length; i++) {
+      cumulativeProbability += probabilities[i];
+      if (randomValue <= cumulativeProbability) {
+        return i;
+      }
+    }
+    
+    // Fallback to last action if something goes wrong
+    return probabilities.length - 1;
+  }
+  
+  // Softmax function to convert logits to probabilities
+  private softmax(logits: number[]): number[] {
+    // Find max for numerical stability
+    const maxLogit = Math.max(...logits);
+    
+    // Subtract max and exponentiate
+    const expValues = logits.map(logit => Math.exp(logit - maxLogit));
+    
+    // Sum of all exp values
+    const sumExp = expValues.reduce((sum, val) => sum + val, 0);
+    
+    // Normalize to get probabilities
+    return expValues.map(expVal => expVal / sumExp);
   }
 
   // Generate observation for the AI model
