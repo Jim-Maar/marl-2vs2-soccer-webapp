@@ -1,8 +1,8 @@
 // Soccer Game Constants
 
 // Screen dimensions - updated to match game aspect ratio
-export const SCREEN_WIDTH = 800;
-export const SCREEN_HEIGHT = 600;
+export const SCREEN_WIDTH = 600;
+export const SCREEN_HEIGHT = 800;
 
 // Game dimensions
 export const GAME_WIDTH = 30;

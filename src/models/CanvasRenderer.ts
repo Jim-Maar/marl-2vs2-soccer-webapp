@@ -84,21 +84,27 @@ export class CanvasRenderer {
     // Draw walls
     this.ctx.fillStyle = WHITE;
     
-    // Top wall 
-    this.ctx.fillRect(0, GAME_HEIGHT - WALL_THICKNESS, GAME_WIDTH, WALL_THICKNESS);
-    
-    // Bottom wall
+    // Bottom wall (y = 0 in our physics/game coordinates)
     this.ctx.fillRect(0, 0, GAME_WIDTH, WALL_THICKNESS);
     
-    // Draw left wall with goal
-    const goalLeftPos = (GAME_HEIGHT - GOAL_WIDTH) / 2;
-    this.ctx.fillRect(0, 0, WALL_THICKNESS, GAME_HEIGHT);
-    this.ctx.clearRect(0, goalLeftPos, WALL_THICKNESS, GOAL_WIDTH); // Goal opening
+    // Top wall (y = GAME_HEIGHT - WALL_THICKNESS)
+    this.ctx.fillRect(0, GAME_HEIGHT - WALL_THICKNESS, GAME_WIDTH, WALL_THICKNESS);
     
-    // Draw right wall with goal
-    const goalRightPos = (GAME_HEIGHT - GOAL_WIDTH) / 2;
+    // Draw left wall
+    this.ctx.fillRect(0, 0, WALL_THICKNESS, GAME_HEIGHT);
+    
+    // Draw right wall
     this.ctx.fillRect(GAME_WIDTH - WALL_THICKNESS, 0, WALL_THICKNESS, GAME_HEIGHT);
-    this.ctx.clearRect(GAME_WIDTH - WALL_THICKNESS, goalRightPos, WALL_THICKNESS, GOAL_WIDTH); // Goal opening
+    
+    // Draw goal openings
+    const goalLeftPos = (GAME_HEIGHT - GOAL_WIDTH) / 2;
+    const goalRightPos = goalLeftPos;
+    
+    // Clear left goal opening
+    this.ctx.clearRect(0, goalLeftPos, WALL_THICKNESS, GOAL_WIDTH);
+    
+    // Clear right goal opening
+    this.ctx.clearRect(GAME_WIDTH - WALL_THICKNESS, goalRightPos, WALL_THICKNESS, GOAL_WIDTH);
     
     // Draw goal lines
     this.ctx.strokeStyle = GREEN;

@@ -235,16 +235,16 @@ const SoccerGame: React.FC<SoccerGameProps> = ({
       
       switch (controlType) {
         case ControlType.WASD:
-          action = getWASDAction();
+          action = getWASDAction(i);
           break;
         case ControlType.IJKL:
-          action = getIJKLAction();
+          action = getIJKLAction(i);
           break;
         case ControlType.ARROWS:
-          action = getArrowsAction();
+          action = getArrowsAction(i);
           break;
         case ControlType.NUMPAD:
-          action = getNumpadAction();
+          action = getNumpadAction(i);
           break;
         case ControlType.AI1:
         case ControlType.AI2:
@@ -300,7 +300,7 @@ const SoccerGame: React.FC<SoccerGameProps> = ({
           const modelNumber = controlType === ControlType.AI1 ? 1 : 2;
           const aiAction = await getAIAction(observation, modelNumber);
           
-          console.log("AI action:", aiAction);
+          // console.log("AI action:", aiAction);
           // Apply the action
           worldManagerRef.current.applyPlayerAction(i, aiAction, PLAYER_SPEED);
         } catch (err) {
@@ -318,11 +318,11 @@ const SoccerGame: React.FC<SoccerGameProps> = ({
     if (goalScored !== -1) {
       // Update score
       const newScore: [number, number] = [...score];
-      if (goalScored === 0 || goalScored === 1) {
-        // Red team scored
+      if (goalScored === 0) {
+        // Ball entered top goal, Red team (bottom) scored
         newScore[0] += 1;
-      } else {
-        // Blue team scored
+      } else if (goalScored === 1) {
+        // Ball entered bottom goal, Blue team (top) scored
         newScore[1] += 1;
       }
       setScore(newScore);
@@ -500,8 +500,73 @@ const SoccerGame: React.FC<SoccerGameProps> = ({
       ctx.scale(pixelsPerMeter, -pixelsPerMeter);
       ctx.lineWidth /= pixelsPerMeter;
       
-      // Draw world using Box2D debug draw
+      // Draw world using Box2D debug draw - for ball and dynamic objects physics
       worldManager.draw();
+      
+      // Draw boundaries with proper thickness
+      const boundaries = worldManager.getBoundaryData();
+      if (boundaries) {
+        ctx.fillStyle = WHITE;
+        
+        // Draw all wall segments
+        Object.entries(boundaries).forEach(([key, boundary]) => {
+          // Adjust rendering position to match physics bodies
+          let x = boundary.x;
+          let y = boundary.y;
+          
+          // For the right wall, the physics position is at the edge, but we draw from the left side of the wall
+          if (key === 'rightWall') {
+            x = GAME_WIDTH - boundary.width;
+          }
+          
+          ctx.fillRect(
+            x,
+            y,
+            boundary.width,
+            boundary.height
+          );
+        });
+      }
+      
+      // Get game state for drawing players and ball
+      if (worldManager) {
+        const gameState = worldManager.getGameState(GAME_WIDTH, GAME_HEIGHT);
+        if (gameState) {
+          // Draw players with team colors
+          if (gameState.players) {
+            // Draw each player with team color
+            gameState.players.forEach(player => {
+              // Set color based on team
+              ctx.fillStyle = player.team === 0 ? BLUE : RED;
+              
+              // Draw player rectangle
+              const drawX = player.position.x - PLAYER_SIZE / 2;
+              const drawY = player.position.y - PLAYER_SIZE / 2;
+              
+              ctx.fillRect(
+                drawX,
+                drawY,
+                PLAYER_SIZE,
+                PLAYER_SIZE
+              );
+            });
+          }
+          
+          // Draw ball with white color
+          if (gameState.ball) {
+            ctx.fillStyle = WHITE;
+            ctx.beginPath();
+            ctx.arc(
+              gameState.ball.position.x,
+              gameState.ball.position.y,
+              BALL_RADIUS,
+              0,
+              Math.PI * 2
+            );
+            ctx.fill();
+          }
+        }
+      }
       
       ctx.restore();
       

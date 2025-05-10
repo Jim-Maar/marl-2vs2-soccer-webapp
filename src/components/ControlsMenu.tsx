@@ -25,7 +25,7 @@ const ControlsMenu: React.FC<ControlsMenuProps> = ({
         {playerControls.map((control, index) => (
           <React.Fragment key={index}>
             <div className="player-label">
-              Agent {index + 1} ({index < 2 ? 'Red' : 'Blue'} Team)
+              Agent {index + 1} ({index < 2 ? 'Blue' : 'Red'} Team)
             </div>
             <div className="player-control">
               <select

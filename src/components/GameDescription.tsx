@@ -24,6 +24,13 @@ const GameDescription: React.FC = () => {
         (e.g., W+D) for diagonal movement.
       </p>
       
+      <p>
+        <strong>Note:</strong> Controls are adjusted based on each player's starting position. 
+        So regardless of which player you control or which corner they start in, pressing 'up' will always 
+        move toward the opposing team's goal, 'down' toward your own goal, 'left' toward the left side of the field, 
+        and 'right' toward the right side of the field from your player's perspective.
+      </p>
+      
       <style>{`
         .game-description {
           background-color: #f5f5f5;

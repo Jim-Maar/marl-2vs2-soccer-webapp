@@ -51,6 +51,19 @@ export class SoccerWorldManager {
   private ball: Box2D.b2Body | null = null;
   private groundBody: Box2D.b2Body | null = null;
   private debugDraw: Box2D.JSDraw | null = null;
+  private boundaries: {
+    topLeft: { x: number; y: number; width: number; height: number; };
+    topRight: { x: number; y: number; width: number; height: number; };
+    bottomLeft: { x: number; y: number; width: number; height: number; };
+    bottomRight: { x: number; y: number; width: number; height: number; };
+    leftWall: { x: number; y: number; width: number; height: number; };
+    rightWall: { x: number; y: number; width: number; height: number; };
+    topGoalPost1: { x: number; y: number; width: number; height: number; };
+    topGoalPost2: { x: number; y: number; width: number; height: number; };
+    bottomGoalPost1: { x: number; y: number; width: number; height: number; };
+    bottomGoalPost2: { x: number; y: number; width: number; height: number; };
+  } | null = null;
+  private wallBodies: Box2D.b2Body[] = [];
 
   constructor(
     private readonly box2D: Box2DType, 
@@ -73,61 +86,151 @@ export class SoccerWorldManager {
   createBoundaries(gameWidth: number, gameHeight: number, wallThickness: number, goalWidth: number) {
     if (!this.world) throw new Error("World not initialized");
     
-    const { b2BodyDef, b2EdgeShape, b2Vec2 } = this.box2D;
+    const { b2BodyDef, b2PolygonShape, b2Vec2 } = this.box2D;
     
-    // Create ground body
-    const groundBodyDef = new b2BodyDef();
-    this.groundBody = this.world.CreateBody(groundBodyDef);
-
-    // Create field boundaries
-    const shape = new b2EdgeShape();
+    // Clear any existing wall bodies
+    this.wallBodies = [];
     
-    // Left wall
-    shape.SetTwoSided(new b2Vec2(0, 0), new b2Vec2(0, gameHeight));
-    this.groundBody.CreateFixture(shape, 0.0);
-    
-    // Right wall
-    shape.SetTwoSided(new b2Vec2(gameWidth, 0), new b2Vec2(gameWidth, gameHeight));
-    this.groundBody.CreateFixture(shape, 0.0);
-    
-    // Top goal and walls (y = 0)
+    // Store boundary data for rendering
     const topGoalStart = (gameWidth - goalWidth) / 2;
     const topGoalEnd = topGoalStart + goalWidth;
-    
-    // Top left wall
-    shape.SetTwoSided(new b2Vec2(0, 0), new b2Vec2(topGoalStart, 0));
-    this.groundBody.CreateFixture(shape, 0.0);
-    
-    // Top right wall
-    shape.SetTwoSided(new b2Vec2(topGoalEnd, 0), new b2Vec2(gameWidth, 0));
-    this.groundBody.CreateFixture(shape, 0.0);
-    
-    // Bottom goal and walls (y = gameHeight)
     const bottomGoalStart = (gameWidth - goalWidth) / 2;
     const bottomGoalEnd = bottomGoalStart + goalWidth;
     
-    // Bottom left wall
-    shape.SetTwoSided(new b2Vec2(0, gameHeight), new b2Vec2(bottomGoalStart, gameHeight));
-    this.groundBody.CreateFixture(shape, 0.0);
+    this.boundaries = {
+      // Left wall
+      leftWall: { 
+        x: 0, 
+        y: 0, 
+        width: wallThickness, 
+        height: gameHeight 
+      },
+      
+      // Right wall
+      rightWall: { 
+        x: gameWidth - wallThickness, 
+        y: 0, 
+        width: wallThickness, 
+        height: gameHeight 
+      },
+      
+      // Top walls (y = 0)
+      topLeft: { 
+        x: 0, 
+        y: 0,
+        width: topGoalStart, 
+        height: wallThickness 
+      },
+      
+      topRight: { 
+        x: topGoalEnd, 
+        y: 0, 
+        width: gameWidth - topGoalEnd, 
+        height: wallThickness 
+      },
+      
+      // Bottom walls (y = gameHeight - wallThickness)
+      bottomLeft: { 
+        x: 0, 
+        y: gameHeight - wallThickness, 
+        width: bottomGoalStart, 
+        height: wallThickness 
+      },
+      
+      bottomRight: { 
+        x: topGoalEnd, 
+        y: gameHeight - wallThickness, 
+        width: gameWidth - topGoalEnd, 
+        height: wallThickness 
+      },
+      
+      // Goal posts
+      topGoalPost1: { 
+        x: topGoalStart, 
+        y: 0, 
+        width: wallThickness, 
+        height: wallThickness 
+      },
+      
+      topGoalPost2: { 
+        x: topGoalEnd, 
+        y: 0, 
+        width: wallThickness, 
+        height: wallThickness 
+      },
+      
+      bottomGoalPost1: { 
+        x: bottomGoalStart, 
+        y: gameHeight - wallThickness, 
+        width: wallThickness, 
+        height: wallThickness 
+      },
+      
+      bottomGoalPost2: { 
+        x: bottomGoalEnd, 
+        y: gameHeight - wallThickness, 
+        width: wallThickness, 
+        height: wallThickness 
+      }
+    };
     
-    // Bottom right wall
-    shape.SetTwoSided(new b2Vec2(bottomGoalEnd, gameHeight), new b2Vec2(gameWidth, gameHeight));
-    this.groundBody.CreateFixture(shape, 0.0);
+    // Following the Python implementation to create solid wall bodies
+    
+    // Create left wall
+    const leftWallBodyDef = new b2BodyDef();
+    leftWallBodyDef.set_position(new b2Vec2(0, gameHeight / 2));
+    const leftWallBody = this.world.CreateBody(leftWallBodyDef);
+    
+    const leftWallShape = new b2PolygonShape();
+    leftWallShape.SetAsBox(wallThickness, gameHeight / 2);
+    leftWallBody.CreateFixture(leftWallShape, 0.0);
+    this.wallBodies.push(leftWallBody);
+    
+    // Create right wall
+    const rightWallBodyDef = new b2BodyDef();
+    rightWallBodyDef.set_position(new b2Vec2(gameWidth, gameHeight / 2));
+    const rightWallBody = this.world.CreateBody(rightWallBodyDef);
+    
+    const rightWallShape = new b2PolygonShape();
+    rightWallShape.SetAsBox(wallThickness, gameHeight / 2);
+    rightWallBody.CreateFixture(rightWallShape, 0.0);
+    this.wallBodies.push(rightWallBody);
+    
+    // Create top wall with goal opening
+    this.createGoalWall(true, gameWidth, gameHeight, wallThickness, goalWidth);
+    
+    // Create bottom wall with goal opening
+    this.createGoalWall(false, gameWidth, gameHeight, wallThickness, goalWidth);
+  }
 
-    // Add goal posts
-    // Top goal posts
-    shape.SetTwoSided(new b2Vec2(topGoalStart, 0), new b2Vec2(topGoalStart, -wallThickness));
-    this.groundBody.CreateFixture(shape, 0.0);
+  // Helper method to create walls with goal openings
+  private createGoalWall(isTop: boolean, gameWidth: number, gameHeight: number, wallThickness: number, goalWidth: number) {
+    if (!this.world) return;
     
-    shape.SetTwoSided(new b2Vec2(topGoalEnd, 0), new b2Vec2(topGoalEnd, -wallThickness));
-    this.groundBody.CreateFixture(shape, 0.0);
+    const { b2BodyDef, b2PolygonShape, b2Vec2 } = this.box2D;
     
-    // Bottom goal posts
-    shape.SetTwoSided(new b2Vec2(bottomGoalStart, gameHeight), new b2Vec2(bottomGoalStart, gameHeight + wallThickness));
-    this.groundBody.CreateFixture(shape, 0.0);
+    const wallWidth = (gameWidth - goalWidth) / 2;
+    const yPos = isTop ? 0 : gameHeight;
     
-    shape.SetTwoSided(new b2Vec2(bottomGoalEnd, gameHeight), new b2Vec2(bottomGoalEnd, gameHeight + wallThickness));
-    this.groundBody.CreateFixture(shape, 0.0);
+    // Left part
+    const leftPartBodyDef = new b2BodyDef();
+    leftPartBodyDef.set_position(new b2Vec2(wallWidth / 2, yPos));
+    const leftPartBody = this.world.CreateBody(leftPartBodyDef);
+    
+    const leftPartShape = new b2PolygonShape();
+    leftPartShape.SetAsBox(wallWidth / 2, wallThickness);
+    leftPartBody.CreateFixture(leftPartShape, 0.0);
+    this.wallBodies.push(leftPartBody);
+    
+    // Right part
+    const rightPartBodyDef = new b2BodyDef();
+    rightPartBodyDef.set_position(new b2Vec2(gameWidth - wallWidth / 2, yPos));
+    const rightPartBody = this.world.CreateBody(rightPartBodyDef);
+    
+    const rightPartShape = new b2PolygonShape();
+    rightPartShape.SetAsBox(wallWidth / 2, wallThickness);
+    rightPartBody.CreateFixture(rightPartShape, 0.0);
+    this.wallBodies.push(rightPartBody);
   }
 
   createPlayers(gameWidth: number, gameHeight: number, playerSize: number, spawningRadius: number, playerDensity: number, playerFriction: number) {
@@ -395,11 +498,21 @@ export class SoccerWorldManager {
     if (!this.ball) return -1;
     
     const ballPos = this.ball.GetPosition();
-    if (ballPos.get_y() < 0) {  // Top goal (Team 0 scores)
+    const ballX = ballPos.get_x();
+    const ballY = ballPos.get_y();
+    
+    // Check if ball is in top goal area
+    if (ballY < 0) {
+      // Team 0 scores on top goal
       return 0;
-    } else if (ballPos.get_y() > gameHeight) {  // Bottom goal (Team 1 scores)
+    }
+    
+    // Check if ball is in bottom goal area
+    if (ballY > gameHeight) {
+      // Team 1 scores on bottom goal
       return 1;
     }
+    
     return -1;  // No goal
   }
 
@@ -417,17 +530,26 @@ export class SoccerWorldManager {
   destroy() {
     if (this.world) {
       try {
-        // Clean up bodies first
+        // Clean up player bodies first
         this.players.forEach(player => {
           if (player && this.world) {
             this.world.DestroyBody(player);
           }
         });
         
+        // Clean up ball
         if (this.ball && this.world) {
           this.world.DestroyBody(this.ball);
         }
         
+        // Clean up wall bodies
+        this.wallBodies.forEach(body => {
+          if (body && this.world) {
+            this.world.DestroyBody(body);
+          }
+        });
+        
+        // Clean up ground body if it exists
         if (this.groundBody && this.world) {
           this.world.DestroyBody(this.groundBody);
         }
@@ -440,7 +562,9 @@ export class SoccerWorldManager {
         this.players = [];
         this.ball = null;
         this.groundBody = null;
+        this.wallBodies = [];
         this.debugDraw = null;
+        this.boundaries = null;
       } catch (e) {
         console.error("Error destroying SoccerWorldManager:", e);
       }
@@ -464,6 +588,11 @@ export class SoccerWorldManager {
     if (this.world && this.debugDraw) {
       this.world.DebugDraw();
     }
+  }
+
+  // Get boundary data for rendering
+  getBoundaryData() {
+    return this.boundaries;
   }
 }
 

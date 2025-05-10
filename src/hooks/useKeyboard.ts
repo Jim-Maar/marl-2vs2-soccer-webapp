@@ -17,7 +17,7 @@ export enum KeyboardControlType {
 
 type KeyPressMap = Record<string, boolean>;
 
-const getActionFromKeys = (keys: KeyPressMap | null, controlType: KeyboardControlType): number => {
+const getActionFromKeys = (keys: KeyPressMap | null, controlType: KeyboardControlType, playerIndex: number = 0): number => {
   // If keys is null or undefined, return NO_OP
   if (!keys) {
     return NO_OP;
@@ -56,31 +56,48 @@ const getActionFromKeys = (keys: KeyPressMap | null, controlType: KeyboardContro
       break;
   }
 
+  // Get the key presses
+  let upPressed = keys[upKey];
+  let downPressed = keys[downKey];
+  let leftPressed = keys[leftKey];
+  let rightPressed = keys[rightKey];
+
+  // Swap controls based on player index/orientation
+  if (playerIndex === 1 || playerIndex === 3) {
+    // Swap left and right for players 1 and 3
+    [leftPressed, rightPressed] = [rightPressed, leftPressed];
+  }
+  
+  if (playerIndex === 2 || playerIndex === 3) {
+    // Swap up and down for players 2 and 3
+    [upPressed, downPressed] = [downPressed, upPressed];
+  }
+
   // Check combined key presses for diagonal movement
-  if (keys[upKey] && keys[rightKey]) {
+  if (upPressed && rightPressed) {
     return UP_RIGHT;
   }
-  if (keys[upKey] && keys[leftKey]) {
+  if (upPressed && leftPressed) {
     return UP_LEFT;
   }
-  if (keys[downKey] && keys[rightKey]) {
+  if (downPressed && rightPressed) {
     return DOWN_RIGHT;
   }
-  if (keys[downKey] && keys[leftKey]) {
+  if (downPressed && leftPressed) {
     return DOWN_LEFT;
   }
 
   // Single key presses
-  if (keys[upKey]) {
+  if (upPressed) {
     return UP;
   }
-  if (keys[rightKey]) {
+  if (rightPressed) {
     return RIGHT;
   }
-  if (keys[downKey]) {
+  if (downPressed) {
     return DOWN;
   }
-  if (keys[leftKey]) {
+  if (leftPressed) {
     return LEFT;
   }
 
@@ -112,10 +129,10 @@ export const useKeyboard = () => {
   }, []);
 
   // Use useCallback to ensure these functions have stable references
-  const getWASDAction = useCallback(() => getActionFromKeys(keyMapRef.current, KeyboardControlType.WASD), []);
-  const getIJKLAction = useCallback(() => getActionFromKeys(keyMapRef.current, KeyboardControlType.IJKL), []);
-  const getArrowsAction = useCallback(() => getActionFromKeys(keyMapRef.current, KeyboardControlType.ARROWS), []);
-  const getNumpadAction = useCallback(() => getActionFromKeys(keyMapRef.current, KeyboardControlType.NUMPAD), []);
+  const getWASDAction = useCallback((playerIndex: number = 0) => getActionFromKeys(keyMapRef.current, KeyboardControlType.WASD, playerIndex), []);
+  const getIJKLAction = useCallback((playerIndex: number = 0) => getActionFromKeys(keyMapRef.current, KeyboardControlType.IJKL, playerIndex), []);
+  const getArrowsAction = useCallback((playerIndex: number = 0) => getActionFromKeys(keyMapRef.current, KeyboardControlType.ARROWS, playerIndex), []);
+  const getNumpadAction = useCallback((playerIndex: number = 0) => getActionFromKeys(keyMapRef.current, KeyboardControlType.NUMPAD, playerIndex), []);
 
   return {
     keyMap: keyMapRef.current, // For backwards compatibility
