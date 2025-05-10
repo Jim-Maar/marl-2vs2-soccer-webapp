@@ -36,7 +36,7 @@ export class AIController {
   }
 
   // Get action from AI model
-  async getAction(observation: Observation, modelNumber: 1 | 2 = 1, useSoftmax: boolean = false): Promise<number> {
+  async getAction(observation: Observation, modelNumber: 1 | 2 = 1, useSoftmax: boolean = true): Promise<number> {
     const session = modelNumber === 1 ? this.session1 : this.session2;
     
     if (!session) {
@@ -44,6 +44,7 @@ export class AIController {
     }
     
     try {
+      console.log('Observation:', observation);
       // Create input tensor
       const tensor = new ort.Tensor('float32', new Float32Array(observation), [1, 20]);
       
@@ -58,6 +59,7 @@ export class AIController {
       const output = results[session.outputNames[0]];
       const outputData = output.data as Float32Array;
       
+      console.log('Softmax:', useSoftmax);
       if (useSoftmax) {
         // Use softmax sampling
         return this.softmaxSampling(Array.from(outputData));
@@ -73,6 +75,7 @@ export class AIController {
 
   // Softmax sampling implementation
   private softmaxSampling(logits: number[]): number {
+    console.log('Softmax sampling:', logits);
     // Apply softmax to convert logits to probabilities
     const probabilities = this.softmax(logits);
     
@@ -83,6 +86,7 @@ export class AIController {
     for (let i = 0; i < probabilities.length; i++) {
       cumulativeProbability += probabilities[i];
       if (randomValue <= cumulativeProbability) {
+        console.log('Action chosen:', i, 'with probability:', probabilities[i]);
         return i;
       }
     }

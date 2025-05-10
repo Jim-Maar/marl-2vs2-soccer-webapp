@@ -212,7 +212,7 @@ const SoccerGame: React.FC<SoccerGameProps> = ({
   const { 
     isLoading: isLoadingModels, 
     error: modelError, 
-    getAction: getAIAction,
+    getAction:  getAIAction,
     isReady: areModelsReady
   } = useOnnxModel({
     modelPath1: '/models/actor1.onnx',
@@ -300,6 +300,7 @@ const SoccerGame: React.FC<SoccerGameProps> = ({
           const modelNumber = controlType === ControlType.AI1 ? 1 : 2;
           const aiAction = await getAIAction(observation, modelNumber);
           
+          console.log("AI action:", aiAction);
           // Apply the action
           worldManagerRef.current.applyPlayerAction(i, aiAction, PLAYER_SPEED);
         } catch (err) {

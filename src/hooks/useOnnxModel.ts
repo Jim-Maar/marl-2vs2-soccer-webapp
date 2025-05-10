@@ -85,12 +85,50 @@ export const useOnnxModel = ({ modelPath1, modelPath2 }: UseOnnxModelProps): Use
       const outputData = output.data as Float32Array;
       
       // Get action with highest probability
-      return Array.from(outputData).indexOf(Math.max(...Array.from(outputData)));
+      // return Array.from(outputData).indexOf(Math.max(...Array.from(outputData)));
+      return softmaxSampling(Array.from(outputData));
     } catch (err) {
       console.error('Error running inference:', err);
       return 8; // NO_OP as fallback
     }
   }, [session1, session2]);
+
+  // Softmax sampling implementation
+  const softmaxSampling = (logits: number[]): number => {
+    // console.log('Softmax sampling:', logits);
+    // Apply softmax to convert logits to probabilities
+    const probabilities = softmax(logits);
+    
+    // Sample from the probability distribution
+    const randomValue = Math.random();
+    let cumulativeProbability = 0;
+    
+    for (let i = 0; i < probabilities.length; i++) {
+      cumulativeProbability += probabilities[i];
+      if (randomValue <= cumulativeProbability) {
+        // console.log('Action chosen:', i, 'with probability:', probabilities[i]);
+        return i;
+      }
+    }
+    
+    // Fallback to last action if something goes wrong
+    return probabilities.length - 1;
+  }
+  
+  // Softmax function to convert logits to probabilities
+  const softmax = (logits: number[]): number[] => {
+    // Find max for numerical stability
+    const maxLogit = Math.max(...logits);
+    
+    // Subtract max and exponentiate
+    const expValues = logits.map(logit => Math.exp(logit - maxLogit));
+    
+    // Sum of all exp values
+    const sumExp = expValues.reduce((sum, val) => sum + val, 0);
+    
+    // Normalize to get probabilities
+    return expValues.map(expVal => expVal / sumExp);
+  }
 
   return {
     isLoading,
