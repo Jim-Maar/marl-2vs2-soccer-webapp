@@ -4,7 +4,6 @@ import Header from './components/Header';
 import GameDescription from './components/GameDescription';
 import ControlsMenu from './components/ControlsMenu';
 import SoccerGame from './components/SoccerGame';
-import ScoreBoard from './components/ScoreBoard';
 import { ControlType } from './utils/constants';
 
 function App() {
@@ -70,11 +69,6 @@ function App() {
           playerControls={playerControls} 
           onControlChange={handleControlChange} 
           onStartStop={handleStartStop}
-          isRunning={isRunning}
-        />
-        
-        <ScoreBoard
-          score={score}
           isRunning={isRunning}
         />
         

@@ -32,6 +32,7 @@ import {
 } from '../utils/constants';
 import { KeyboardControlType } from '../hooks/useKeyboard';
 import { Box2DType, GameState, PlayerData } from '../types';
+import { CanvasRenderer } from '../models/CanvasRenderer';
 
 // Debug Draw class for rendering similar to PhysicsSimulation.tsx
 class CanvasDebugDraw {
@@ -199,14 +200,43 @@ const SoccerGame: React.FC<SoccerGameProps> = ({
   const previousTimeRef = useRef<number | null>(null);
   const accumulatorRef = useRef<number>(0);
   const fpsCounterRef = useRef<{ frames: number; time: number }>({ frames: 0, time: 0 });
+  const canvasRendererRef = useRef<CanvasRenderer | null>(null);
   
   // State
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [score, setScore] = useState<[number, number]>([0, 0]);
   const [fps, setFps] = useState<number>(0);
+  const [canvasDimensions, setCanvasDimensions] = useState<{width: number, height: number}>({
+    width: SCREEN_WIDTH,
+    height: SCREEN_HEIGHT
+  });
 
   console.log("SoccerGame: Rerendering");
+  
+  // Calculate responsive canvas dimensions
+  const updateCanvasDimensions = useCallback(() => {
+    // Get available height with minimal margin
+    const availableHeight = window.innerHeight - 50; // Minimal margin for other UI elements
+    
+    // Calculate height (capped at SCREEN_HEIGHT)
+    const height = Math.min(availableHeight, SCREEN_HEIGHT);
+    
+    // Calculate width based on height to maintain 4:3 aspect ratio (height:width = 4:3)
+    const width = Math.round(height * 0.75); // 3/4 of height
+    
+    setCanvasDimensions({ width, height });
+  }, []);
+
+  // Update canvas dimensions on window resize
+  useEffect(() => {
+    updateCanvasDimensions();
+    
+    window.addEventListener('resize', updateCanvasDimensions);
+    return () => {
+      window.removeEventListener('resize', updateCanvasDimensions);
+    };
+  }, [updateCanvasDimensions]);
   
   // ONNX Models
   const { 
@@ -468,8 +498,11 @@ const SoccerGame: React.FC<SoccerGameProps> = ({
     // Create helpers instance
     const helpers = new Helpers(box2d);
     
-    // Canvas setup
-    const pixelsPerMeter = PPM;
+    // Calculate pixels per meter based on the current canvas dimensions
+    const pixelsPerMeter = Math.min(
+      canvasDimensions.width / GAME_WIDTH, 
+      canvasDimensions.height / GAME_HEIGHT
+    );
     
     // Create debug draw
     const debugDraw = new CanvasDebugDraw(box2d, helpers, ctx, pixelsPerMeter).constructJSDraw();
@@ -480,6 +513,9 @@ const SoccerGame: React.FC<SoccerGameProps> = ({
     const worldManager = worldManagerRef.current;
     worldManager.setDebugDraw(debugDraw);
     
+    // Create canvas renderer
+    canvasRendererRef.current = new CanvasRenderer(ctx, canvasDimensions.width, canvasDimensions.height);
+    
     console.log('SoccerGame: Debug draw set up on world manager');
     
     // Set up new game when isRunning changes
@@ -489,98 +525,131 @@ const SoccerGame: React.FC<SoccerGameProps> = ({
     
     // Draw the canvas function
     const drawCanvas = () => {
-      // Black background
-      ctx.fillStyle = BLACK;
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-      
-      ctx.save();
-      
-      // Transform to match CanvasRenderer
-      ctx.translate(0, canvas.height);
-      ctx.scale(pixelsPerMeter, -pixelsPerMeter);
-      ctx.lineWidth /= pixelsPerMeter;
-      
-      // Draw world using Box2D debug draw - for ball and dynamic objects physics
-      worldManager.draw();
-      
-      // Draw boundaries with proper thickness
-      const boundaries = worldManager.getBoundaryData();
-      if (boundaries) {
-        ctx.fillStyle = WHITE;
+      // Make sure canvasRenderer is updated with the latest dimensions
+      if (canvasRendererRef.current) {
+        canvasRendererRef.current.updateDimensions(canvas.width, canvas.height);
         
-        // Draw all wall segments
-        Object.entries(boundaries).forEach(([key, boundary]) => {
-          // Adjust rendering position to match physics bodies
-          let x = boundary.x;
-          let y = boundary.y;
+        // Get game state
+        const baseGameState = worldManager.getGameState(GAME_WIDTH, GAME_HEIGHT);
+        if (baseGameState) {
+          // Add the score, isRunning properties, and control property to players
+          const gameState: GameState = {
+            ...baseGameState,
+            score: score,
+            isRunning: isRunning,
+            players: baseGameState.players.map((player, index) => ({
+              ...player,
+              control: playerControls[index]
+            }))
+          };
           
-          // For the right wall, the physics position is at the edge, but we draw from the left side of the wall
-          if (key === 'rightWall') {
-            x = GAME_WIDTH - boundary.width;
-          }
+          // Use the canvas renderer to draw the game
+          canvasRendererRef.current.drawGame(gameState, fps, worldManager);
+        } else {
+          // Fallback to basic rendering if no game state
+          canvasRendererRef.current.clear();
+        }
+      } else {
+        // Fallback if canvasRenderer is not available
+        // Black background
+        ctx.fillStyle = BLACK;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        
+        // Calculate pixels per meter based on current canvas dimensions
+        const pixelsPerMeter = Math.min(
+          canvas.width / GAME_WIDTH, 
+          canvas.height / GAME_HEIGHT
+        );
+        
+        ctx.save();
+        
+        // Transform to match CanvasRenderer
+        ctx.translate(0, canvas.height);
+        ctx.scale(pixelsPerMeter, -pixelsPerMeter);
+        ctx.lineWidth /= pixelsPerMeter;
+        
+        // Draw world using Box2D debug draw - for ball and dynamic objects physics
+        worldManager.draw();
+        
+        // Draw boundaries with proper thickness
+        const boundaries = worldManager.getBoundaryData();
+        if (boundaries) {
+          ctx.fillStyle = WHITE;
           
-          ctx.fillRect(
-            x,
-            y,
-            boundary.width,
-            boundary.height
-          );
-        });
-      }
-      
-      // Get game state for drawing players and ball
-      if (worldManager) {
-        const gameState = worldManager.getGameState(GAME_WIDTH, GAME_HEIGHT);
-        if (gameState) {
-          // Draw players with team colors
-          if (gameState.players) {
-            // Draw each player with team color
-            gameState.players.forEach(player => {
-              // Set color based on team
-              ctx.fillStyle = player.team === 0 ? BLUE : RED;
-              
-              // Draw player rectangle
-              const drawX = player.position.x - PLAYER_SIZE / 2;
-              const drawY = player.position.y - PLAYER_SIZE / 2;
-              
-              ctx.fillRect(
-                drawX,
-                drawY,
-                PLAYER_SIZE,
-                PLAYER_SIZE
-              );
-            });
-          }
-          
-          // Draw ball with white color
-          if (gameState.ball) {
-            ctx.fillStyle = WHITE;
-            ctx.beginPath();
-            ctx.arc(
-              gameState.ball.position.x,
-              gameState.ball.position.y,
-              BALL_RADIUS,
-              0,
-              Math.PI * 2
+          // Draw all wall segments
+          Object.entries(boundaries).forEach(([key, boundary]) => {
+            // Adjust rendering position to match physics bodies
+            let x = boundary.x;
+            let y = boundary.y;
+            
+            // For the right wall, the physics position is at the edge, but we draw from the left side of the wall
+            if (key === 'rightWall') {
+              x = GAME_WIDTH - boundary.width;
+            }
+            
+            ctx.fillRect(
+              x,
+              y,
+              boundary.width,
+              boundary.height
             );
-            ctx.fill();
+          });
+        }
+        
+        // Get game state for drawing players and ball
+        if (worldManager) {
+          const gameState = worldManager.getGameState(GAME_WIDTH, GAME_HEIGHT);
+          if (gameState) {
+            // Draw players with team colors
+            if (gameState.players) {
+              // Draw each player with team color
+              gameState.players.forEach(player => {
+                // Set color based on team
+                ctx.fillStyle = player.team === 0 ? BLUE : RED;
+                
+                // Draw player rectangle
+                const drawX = player.position.x - PLAYER_SIZE / 2;
+                const drawY = player.position.y - PLAYER_SIZE / 2;
+                
+                ctx.fillRect(
+                  drawX,
+                  drawY,
+                  PLAYER_SIZE,
+                  PLAYER_SIZE
+                );
+              });
+            }
+            
+            // Draw ball with white color
+            if (gameState.ball) {
+              ctx.fillStyle = WHITE;
+              ctx.beginPath();
+              ctx.arc(
+                gameState.ball.position.x,
+                gameState.ball.position.y,
+                BALL_RADIUS,
+                0,
+                Math.PI * 2
+              );
+              ctx.fill();
+            }
           }
         }
+        
+        ctx.restore();
+        
+        // Draw score directly on screen
+        ctx.fillStyle = WHITE;
+        ctx.font = '24px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText(`Red ${score[0]} - ${score[1]} Blue`, canvas.width / 2, 30);
+        
+        // Draw FPS
+        ctx.fillStyle = WHITE;
+        ctx.font = '12px Arial';
+        ctx.textAlign = 'left';
+        ctx.fillText(`FPS: ${fps}`, 10, 20);
       }
-      
-      ctx.restore();
-      
-      // Draw score directly on screen
-      ctx.fillStyle = WHITE;
-      ctx.font = '24px Arial';
-      ctx.textAlign = 'center';
-      ctx.fillText(`Red ${score[0]} - ${score[1]} Blue`, canvas.width / 2, 30);
-      
-      // Draw FPS
-      ctx.fillStyle = WHITE;
-      ctx.font = '12px Arial';
-      ctx.textAlign = 'left';
-      ctx.fillText(`FPS: ${fps}`, 10, 20);
     };
     
     // Animation loop with fixed timestep
@@ -662,7 +731,7 @@ const SoccerGame: React.FC<SoccerGameProps> = ({
       previousTimeRef.current = null;
       accumulatorRef.current = 0;
     };
-  }, [loading, error, isRunning, prevIsRunningRef, setupGame, processActions, checkGoal, score, fps]);
+  }, [loading, error, isRunning, prevIsRunningRef, setupGame, processActions, checkGoal, score, fps, canvasDimensions]);
   
   // Handle game starting/stopping
   useEffect(() => {
@@ -712,8 +781,8 @@ const SoccerGame: React.FC<SoccerGameProps> = ({
       ) : (
         <canvas
           ref={canvasRef}
-          width={SCREEN_WIDTH}
-          height={SCREEN_HEIGHT}
+          width={canvasDimensions.width}
+          height={canvasDimensions.height}
           className="game-canvas"
         />
       )}
@@ -722,24 +791,24 @@ const SoccerGame: React.FC<SoccerGameProps> = ({
         .soccer-game {
           display: flex;
           justify-content: center;
-          margin: 20px 0;
+          margin: 5px 0;
         }
         
         .game-canvas {
-          border: 2px solid #333;
-          border-radius: 4px;
+          border: 1px solid #333;
+          border-radius: 2px;
           background-color: #000;
           max-width: 100%;
           height: auto;
         }
         
         .loading, .error {
-          padding: 40px;
+          padding: 20px;
           text-align: center;
           background-color: #f5f5f5;
-          border-radius: 8px;
-          width: ${SCREEN_WIDTH}px;
-          height: ${SCREEN_HEIGHT}px;
+          border-radius: 4px;
+          width: ${canvasDimensions.width}px;
+          height: ${canvasDimensions.height}px;
           display: flex;
           flex-direction: column;
           justify-content: center;

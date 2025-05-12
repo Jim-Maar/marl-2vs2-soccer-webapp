@@ -2,6 +2,10 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 // @ts-ignore - onnxruntime-web doesn't have proper TypeScript definitions
 import * as ort from 'onnxruntime-web';
 import { Observation } from '../types';
+import { AI_TEMPERATURE } from '../utils/constants';
+
+// Add temperature constant
+// const DEFAULT_TEMPERATURE = 1.0; // Default temperature (1.0 = standard softmax)
 
 interface UseOnnxModelProps {
   modelPath1: string;
@@ -86,18 +90,17 @@ export const useOnnxModel = ({ modelPath1, modelPath2 }: UseOnnxModelProps): Use
       
       // Get action with highest probability
       // return Array.from(outputData).indexOf(Math.max(...Array.from(outputData)));
-      return softmaxSampling(Array.from(outputData));
+      return softmaxSampling(Array.from(outputData), AI_TEMPERATURE);
     } catch (err) {
       console.error('Error running inference:', err);
       return 8; // NO_OP as fallback
     }
   }, [session1, session2]);
 
-  // Softmax sampling implementation
-  const softmaxSampling = (logits: number[]): number => {
-    // console.log('Softmax sampling:', logits);
-    // Apply softmax to convert logits to probabilities
-    const probabilities = softmax(logits);
+  // Softmax sampling implementation with temperature parameter
+  const softmaxSampling = (logits: number[], temperature: number = AI_TEMPERATURE): number => {
+    // Apply softmax to convert logits to probabilities with temperature
+    const probabilities = softmax(logits, temperature);
     
     // Sample from the probability distribution
     const randomValue = Math.random();
@@ -106,7 +109,6 @@ export const useOnnxModel = ({ modelPath1, modelPath2 }: UseOnnxModelProps): Use
     for (let i = 0; i < probabilities.length; i++) {
       cumulativeProbability += probabilities[i];
       if (randomValue <= cumulativeProbability) {
-        // console.log('Action chosen:', i, 'with probability:', probabilities[i]);
         return i;
       }
     }
@@ -115,13 +117,15 @@ export const useOnnxModel = ({ modelPath1, modelPath2 }: UseOnnxModelProps): Use
     return probabilities.length - 1;
   }
   
-  // Softmax function to convert logits to probabilities
-  const softmax = (logits: number[]): number[] => {
+  // Softmax function with temperature parameter
+  const softmax = (logits: number[], temperature: number = AI_TEMPERATURE): number[] => {
     // Find max for numerical stability
     const maxLogit = Math.max(...logits);
     
-    // Subtract max and exponentiate
-    const expValues = logits.map(logit => Math.exp(logit - maxLogit));
+    // Apply temperature scaling and subtract max for numerical stability
+    // Lower temperature makes distribution more peaked (less random)
+    // Higher temperature makes distribution more uniform (more random)
+    const expValues = logits.map(logit => Math.exp((logit - maxLogit) / temperature));
     
     // Sum of all exp values
     const sumExp = expValues.reduce((sum, val) => sum + val, 0);

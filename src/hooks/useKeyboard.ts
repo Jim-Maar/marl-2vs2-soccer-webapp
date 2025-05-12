@@ -112,10 +112,20 @@ export const useKeyboard = () => {
   // Set up key event listeners
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      // Prevent default scrolling behavior for arrow keys
+      if (e.code === KEY_UP || e.code === KEY_DOWN || 
+          e.code === KEY_LEFT || e.code === KEY_RIGHT) {
+        e.preventDefault();
+      }
       keyMapRef.current[e.code] = true;
     };
 
     const handleKeyUp = (e: KeyboardEvent) => {
+      // Also prevent default on key up for consistency
+      if (e.code === KEY_UP || e.code === KEY_DOWN || 
+          e.code === KEY_LEFT || e.code === KEY_RIGHT) {
+        e.preventDefault();
+      }
       keyMapRef.current[e.code] = false;
     };
 

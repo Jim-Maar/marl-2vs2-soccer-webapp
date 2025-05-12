@@ -58,10 +58,6 @@ export class SoccerWorldManager {
     bottomRight: { x: number; y: number; width: number; height: number; };
     leftWall: { x: number; y: number; width: number; height: number; };
     rightWall: { x: number; y: number; width: number; height: number; };
-    topGoalPost1: { x: number; y: number; width: number; height: number; };
-    topGoalPost2: { x: number; y: number; width: number; height: number; };
-    bottomGoalPost1: { x: number; y: number; width: number; height: number; };
-    bottomGoalPost2: { x: number; y: number; width: number; height: number; };
   } | null = null;
   private wallBodies: Box2D.b2Body[] = [];
 
@@ -141,35 +137,6 @@ export class SoccerWorldManager {
         x: topGoalEnd, 
         y: gameHeight - wallThickness, 
         width: gameWidth - topGoalEnd, 
-        height: wallThickness 
-      },
-      
-      // Goal posts
-      topGoalPost1: { 
-        x: topGoalStart, 
-        y: 0, 
-        width: wallThickness, 
-        height: wallThickness 
-      },
-      
-      topGoalPost2: { 
-        x: topGoalEnd, 
-        y: 0, 
-        width: wallThickness, 
-        height: wallThickness 
-      },
-      
-      bottomGoalPost1: { 
-        x: bottomGoalStart, 
-        y: gameHeight - wallThickness, 
-        width: wallThickness, 
-        height: wallThickness 
-      },
-      
-      bottomGoalPost2: { 
-        x: bottomGoalEnd, 
-        y: gameHeight - wallThickness, 
-        width: wallThickness, 
         height: wallThickness 
       }
     };

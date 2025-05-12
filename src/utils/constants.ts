@@ -20,7 +20,10 @@ export const WALL_THICKNESS = 1.0;
 export const GOAL_WIDTH = 24.0; // meters
 export const MAXIMUM_VELOCITY = 50.0;
 export const REALISTIC_MAXIMUM_VELOCITY = 20.0;
-export const SPAWNING_RADIUS = 3.0; // random spawn radius
+export const SPAWNING_RADIUS = 2.0; // random spawn radius
+
+// AI parameters
+export const AI_TEMPERATURE = 0.4; // Controls randomness in AI decisions (lower = more deterministic)
 
 // Physics parameters
 export const PLAYER_DENSITY = 2.0;

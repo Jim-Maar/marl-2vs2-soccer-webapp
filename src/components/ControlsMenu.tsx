@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { ControlType } from '../utils/constants';
 
 interface ControlsMenuProps {
@@ -14,6 +14,39 @@ const ControlsMenu: React.FC<ControlsMenuProps> = ({
   onStartStop,
   isRunning
 }) => {
+  const handleStartStop = () => {
+    onStartStop();
+    
+    if (!isRunning) {
+      setTimeout(() => {
+        window.scrollTo({
+          top: document.body.scrollHeight,
+          behavior: 'smooth'
+        });
+      }, 100);
+    }
+  };
+
+  // Add keyboard event listener for space key
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      // Check if the pressed key is space and no input elements are focused
+      if (event.code === 'Space' && 
+          !['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName || '')) {
+        event.preventDefault(); // Prevent page scrolling on space press
+        handleStartStop();
+      }
+    };
+
+    // Add event listener
+    window.addEventListener('keydown', handleKeyDown);
+
+    // Clean up event listener on component unmount
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isRunning]); // Re-add listener when isRunning changes
+
   return (
     <div className="controls-menu">
       <div className="controls-grid">
@@ -37,8 +70,8 @@ const ControlsMenu: React.FC<ControlsMenuProps> = ({
                 <option value={ControlType.IJKL}>IJKL</option>
                 <option value={ControlType.ARROWS}>Arrows</option>
                 <option value={ControlType.NUMPAD}>Numpad</option>
-                <option value={ControlType.AI1}>AI Model 1</option>
-                <option value={ControlType.AI2}>AI Model 2</option>
+                <option value={ControlType.AI1}>AI</option>
+                {/* <option value={ControlType.AI2}>AI Model 2</option> */}
               </select>
             </div>
           </React.Fragment>
@@ -48,7 +81,7 @@ const ControlsMenu: React.FC<ControlsMenuProps> = ({
       <div className="start-button-container">
         <button 
           className={`start-button ${isRunning ? 'stop' : 'start'}`}
-          onClick={onStartStop}
+          onClick={handleStartStop}
         >
           {isRunning ? 'Stop Game' : 'Start Game'}
         </button>

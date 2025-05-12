@@ -24,119 +24,91 @@ export class CanvasRenderer {
   private canvasHeight: number;
   private pixelsPerMeter: number;
   
-  constructor(ctx: CanvasRenderingContext2D) {
+  constructor(ctx: CanvasRenderingContext2D, width?: number, height?: number) {
     this.ctx = ctx;
-    this.canvasWidth = SCREEN_WIDTH;
-    this.canvasHeight = SCREEN_HEIGHT;
-    this.pixelsPerMeter = PPM;
+    this.canvasWidth = width || SCREEN_WIDTH;
+    this.canvasHeight = height || SCREEN_HEIGHT;
+    this.pixelsPerMeter = Math.min(this.canvasWidth / GAME_WIDTH, this.canvasHeight / GAME_HEIGHT);
   }
   
-  // Clear the canvas
+  // Update canvas dimensions
+  updateDimensions(width: number, height: number) {
+    this.canvasWidth = width;
+    this.canvasHeight = height;
+    this.pixelsPerMeter = Math.min(this.canvasWidth / GAME_WIDTH, this.canvasHeight / GAME_HEIGHT);
+  }
+  
+  // Clear the canvas with black background
   clear() {
-    console.log('CanvasRenderer: Clearing canvas with color:', BLACK);
     this.ctx.fillStyle = BLACK;
     this.ctx.fillRect(0, 0, this.canvasWidth, this.canvasHeight);
   }
   
-  // Draw the field (boundaries, goals, etc.)
-  drawField() {
-    console.log('CanvasRenderer: drawField called, canvas dimensions:', 
-      {width: this.canvasWidth, height: this.canvasHeight, pixelsPerMeter: this.pixelsPerMeter}
-    );
-    
+  // Draw boundaries/walls
+  drawWalls(boundaries: any) {
     this.ctx.save();
     
-    // New coordinate system for horizontal field with lower left at bottom left of canvas
-    console.log('CanvasRenderer: Transforming coordinates for field');
-    
-    // Move to bottom-left of canvas
+    // Transform to game coordinates
     this.ctx.translate(0, this.canvasHeight);
-    
-    // Scale with Y flipped (positive Y goes up)
     this.ctx.scale(this.pixelsPerMeter, -this.pixelsPerMeter);
-    
-    console.log('CanvasRenderer: After transformation, game dimensions:', 
-      {gameWidth: GAME_WIDTH, gameHeight: GAME_HEIGHT}
-    );
-    
-    // Draw field background
-    this.ctx.fillStyle = "rgb(25, 105, 25)";
-    this.ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
-    console.log('CanvasRenderer: Drew field background rect at:', 
-      {x: 0, y: 0, width: GAME_WIDTH, height: GAME_HEIGHT}
-    );
-    
-    // Draw field lines
-    this.ctx.strokeStyle = WHITE;
-    this.ctx.lineWidth = 0.1;
-    
-    // Center line
-    this.ctx.beginPath();
-    this.ctx.moveTo(GAME_WIDTH / 2, 0);
-    this.ctx.lineTo(GAME_WIDTH / 2, GAME_HEIGHT);
-    this.ctx.stroke();
-    
-    // Center circle
-    this.ctx.beginPath();
-    this.ctx.arc(GAME_WIDTH / 2, GAME_HEIGHT / 2, 5, 0, Math.PI * 2);
-    this.ctx.stroke();
     
     // Draw walls
     this.ctx.fillStyle = WHITE;
     
-    // Bottom wall (y = 0 in our physics/game coordinates)
-    this.ctx.fillRect(0, 0, GAME_WIDTH, WALL_THICKNESS);
-    
-    // Top wall (y = GAME_HEIGHT - WALL_THICKNESS)
-    this.ctx.fillRect(0, GAME_HEIGHT - WALL_THICKNESS, GAME_WIDTH, WALL_THICKNESS);
-    
-    // Draw left wall
-    this.ctx.fillRect(0, 0, WALL_THICKNESS, GAME_HEIGHT);
-    
-    // Draw right wall
-    this.ctx.fillRect(GAME_WIDTH - WALL_THICKNESS, 0, WALL_THICKNESS, GAME_HEIGHT);
-    
-    // Draw goal openings
-    const goalLeftPos = (GAME_HEIGHT - GOAL_WIDTH) / 2;
-    const goalRightPos = goalLeftPos;
-    
-    // Clear left goal opening
-    this.ctx.clearRect(0, goalLeftPos, WALL_THICKNESS, GOAL_WIDTH);
-    
-    // Clear right goal opening
-    this.ctx.clearRect(GAME_WIDTH - WALL_THICKNESS, goalRightPos, WALL_THICKNESS, GOAL_WIDTH);
-    
-    // Draw goal lines
-    this.ctx.strokeStyle = GREEN;
-    this.ctx.lineWidth = 0.2;
-    
-    // Left goal line
-    this.ctx.beginPath();
-    this.ctx.moveTo(0, goalLeftPos);
-    this.ctx.lineTo(0, goalLeftPos + GOAL_WIDTH);
-    this.ctx.stroke();
-    
-    // Right goal line
-    this.ctx.beginPath();
-    this.ctx.moveTo(GAME_WIDTH, goalRightPos);
-    this.ctx.lineTo(GAME_WIDTH, goalRightPos + GOAL_WIDTH);
-    this.ctx.stroke();
+    if (boundaries) {
+      // Draw the walls directly from boundary data
+      Object.entries(boundaries).forEach(([key, boundary]: [string, any]) => {
+        // Adjust rendering position to match physics bodies
+        let x = boundary.x;
+        let y = boundary.y;
+        
+        // For the right wall, the physics position is at the edge, but we draw from the left side of the wall
+        if (key.includes('right')) {
+          x = GAME_WIDTH - boundary.width;
+        }
+        
+        this.ctx.fillRect(
+          x,
+          y,
+          boundary.width,
+          boundary.height
+        );
+      });
+    } else {
+      // Fallback if boundary data is not available
+      // Left wall - full height
+      this.ctx.fillRect(0, 0, WALL_THICKNESS, GAME_HEIGHT);
+      
+      // Right wall - full height
+      this.ctx.fillRect(GAME_WIDTH - WALL_THICKNESS, 0, WALL_THICKNESS, GAME_HEIGHT);
+      
+      // Calculate goal position
+      const goalWidth = GOAL_WIDTH;
+      const wallWidth = (GAME_WIDTH - goalWidth) / 2;
+      
+      // Bottom wall with goal opening
+      this.ctx.fillRect(0, 0, wallWidth, WALL_THICKNESS); // Left part
+      this.ctx.fillRect(wallWidth + goalWidth, 0, wallWidth, WALL_THICKNESS); // Right part
+      
+      // Top wall with goal opening
+      this.ctx.fillRect(0, GAME_HEIGHT - WALL_THICKNESS, wallWidth, WALL_THICKNESS); // Left part
+      this.ctx.fillRect(wallWidth + goalWidth, GAME_HEIGHT - WALL_THICKNESS, wallWidth, WALL_THICKNESS); // Right part
+    }
     
     this.ctx.restore();
   }
   
-  // Draw the players
+  // Draw the players as simple rectangles
   drawPlayers(players: GameState['players']) {
-    console.log('CanvasRenderer: drawPlayers called with', players.length, 'players');
     this.ctx.save();
     
-    // Same coordinate system as drawField
+    // Transform to game coordinates
     this.ctx.translate(0, this.canvasHeight);
     this.ctx.scale(this.pixelsPerMeter, -this.pixelsPerMeter);
     
     players.forEach(player => {
       // Get player color based on team
-      const color = player.team === 0 ? RED : BLUE;
+      const color = player.team === 0 ? BLUE : RED;
       
       // Draw player as a square
       this.ctx.fillStyle = color;
@@ -145,47 +117,24 @@ export class CanvasRenderer {
       const drawX = player.position.x - PLAYER_SIZE / 2;
       const drawY = player.position.y - PLAYER_SIZE / 2;
       
-      console.log(`CanvasRenderer: Drawing player ${player.id} (Team ${player.team}) at`, 
-        `game pos (${player.position.x.toFixed(2)}, ${player.position.y.toFixed(2)})`,
-        `-> canvas pos (${drawX.toFixed(2)}, ${drawY.toFixed(2)}), size: ${PLAYER_SIZE}`
-      );
-      
       this.ctx.fillRect(
         drawX,
         drawY,
         PLAYER_SIZE,
         PLAYER_SIZE
       );
-      
-      // Draw player number
-      this.ctx.fillStyle = WHITE;
-      this.ctx.font = '1px Arial';
-      this.ctx.textAlign = 'center';
-      this.ctx.textBaseline = 'middle';
-      this.ctx.fillText(
-        (player.id + 1).toString(),
-        player.position.x,
-        player.position.y
-      );
     });
     
     this.ctx.restore();
   }
   
-  // Draw the ball
+  // Draw the ball as a simple circle
   drawBall(ballPosition: GameState['ball']['position']) {
-    console.log('CanvasRenderer: drawBall called with position:',
-      `x=${ballPosition.x.toFixed(2)}, y=${ballPosition.y.toFixed(2)}`);
     this.ctx.save();
     
-    // Same coordinate system as drawField
+    // Transform to game coordinates
     this.ctx.translate(0, this.canvasHeight);
     this.ctx.scale(this.pixelsPerMeter, -this.pixelsPerMeter);
-    
-    console.log('CanvasRenderer: Drawing ball at', 
-      `game pos (${ballPosition.x.toFixed(2)}, ${ballPosition.y.toFixed(2)})`,
-      `radius: ${BALL_RADIUS}`
-    );
     
     // Draw ball as a circle
     this.ctx.fillStyle = WHITE;
@@ -202,68 +151,47 @@ export class CanvasRenderer {
     this.ctx.restore();
   }
   
-  // Draw score
+  // Draw score - scaled with window size
   drawScore(score: [number, number]) {
     this.ctx.save();
     
+    // Scale font size based on canvas width
+    const fontSize = Math.max(12, Math.min(24, this.canvasWidth / 25));
+    
     this.ctx.fillStyle = WHITE;
-    this.ctx.font = '24px Arial';
+    this.ctx.font = `${fontSize}px Arial`;
     this.ctx.textAlign = 'center';
     
-    // Team names and scores
+    // Team names and scores - positioned at the top with minimal margin
     this.ctx.fillText(
       `Red ${score[0]} - ${score[1]} Blue`,
       this.canvasWidth / 2,
-      30
+      fontSize + 5 // Just enough margin from the top
     );
     
     this.ctx.restore();
   }
   
-  // Draw FPS counter
-  drawFPS(fps: number) {
-    this.ctx.save();
-    
-    this.ctx.fillStyle = WHITE;
-    this.ctx.font = '12px Arial';
-    this.ctx.textAlign = 'left';
-    this.ctx.fillText(`FPS: ${fps}`, 10, 20);
-    
-    this.ctx.restore();
-  }
-  
-  // Draw entire game state
-  drawGame(gameState: GameState, fps: number) {
-    console.log('CanvasRenderer: drawGame called with state:', 
-      {
-        playerCount: gameState.players.length,
-        ballPosition: gameState.ball.position,
-        score: gameState.score,
-        fps
-      }
-    );
-    
+  // Draw entire game state - simplified version
+  drawGame(gameState: GameState, fps: number, worldManager?: any) {
+    // Clear with black background
     this.clear();
-    console.log('CanvasRenderer: Canvas cleared');
     
-    this.drawField();
-    console.log('CanvasRenderer: Field drawn');
+    // Get boundaries from the world manager if available
+    const boundaries = worldManager?.getBoundaryData();
     
+    // Draw walls
+    this.drawWalls(boundaries);
+    
+    // Draw players
     this.drawPlayers(gameState.players);
-    console.log('CanvasRenderer: Players drawn, count:', gameState.players.length);
-    console.log('CanvasRenderer: Player positions:', gameState.players.map(p => 
-      `Player ${p.id} (Team ${p.team}): x=${p.position.x.toFixed(2)}, y=${p.position.y.toFixed(2)}`
-    ));
     
+    // Draw ball
     this.drawBall(gameState.ball.position);
-    console.log('CanvasRenderer: Ball drawn at position:', 
-      `x=${gameState.ball.position.x.toFixed(2)}, y=${gameState.ball.position.y.toFixed(2)}`
-    );
     
+    // Draw score
     this.drawScore(gameState.score);
-    console.log('CanvasRenderer: Score drawn:', gameState.score);
     
-    this.drawFPS(fps);
-    console.log('CanvasRenderer: FPS drawn:', fps);
+    // FPS display removed as requested
   }
 } 
