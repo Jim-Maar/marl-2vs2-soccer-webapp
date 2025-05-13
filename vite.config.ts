@@ -30,4 +30,5 @@ export default defineConfig({
   css: {
     devSourcemap: true,
   },
+  base: '/marl-2vs2-soccer-webapp'
 })
