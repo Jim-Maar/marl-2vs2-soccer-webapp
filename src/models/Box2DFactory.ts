@@ -569,7 +569,7 @@ export const initBox2D = async (): Promise<[Box2DType, Helpers, SoccerWorldManag
     console.log('Box2DFactory: Starting Box2D initialization');
     const box2d = await Box2DFactory({
       locateFile: (path: string) => {
-        const wasmPath = `/wasm/${path}`;
+        const wasmPath = `wasm/${path}`;
         console.log(`Box2DFactory: Loading WASM file from: ${wasmPath}`);
         return wasmPath;
       }

@@ -19,8 +19,8 @@ export class AIController {
     try {
       // Load both models concurrently
       const [model1, model2] = await Promise.all([
-        ort.InferenceSession.create('/models/actor1.onnx'),
-        ort.InferenceSession.create('/models/actor2.onnx')
+        ort.InferenceSession.create('models/actor1.onnx'),
+        ort.InferenceSession.create('models/actor2.onnx')
       ]);
       
       this.session1 = model1;

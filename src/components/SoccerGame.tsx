@@ -245,8 +245,8 @@ const SoccerGame: React.FC<SoccerGameProps> = ({
     getAction:  getAIAction,
     isReady: areModelsReady
   } = useOnnxModel({
-    modelPath1: '/models/actor1.onnx',
-    modelPath2: '/models/actor2.onnx'
+    modelPath1: 'models/actor1.onnx',
+    modelPath2: 'models/actor2.onnx'
   });
   
   // Keyboard controls

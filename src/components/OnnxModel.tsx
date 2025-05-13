@@ -38,7 +38,7 @@ const OnnxModel: React.FC = () => {
     
     try {
       // Create session
-      const session = await ort.InferenceSession.create('/models/actor1.onnx');
+      const session = await ort.InferenceSession.create('models/actor1.onnx');
       
       // Create input tensor
       const input = createInput();
