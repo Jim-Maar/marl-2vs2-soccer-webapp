@@ -5,3 +5,5 @@ This is a reinforcement learning project I did for fun. It's a 2 vs 2 top-down p
 The AIs play differently to humans so you need to learn how to work together with your AI teammate.
 
 You can also play with multiple players on one keyboard by adjusting the controls below.
+
+The models where trained in this repository: https://github.com/Jim-Maar/marl-2vs2-soccer
