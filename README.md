@@ -7,3 +7,5 @@ The AIs play differently to humans so you need to learn how to work together wit
 You can also play with multiple players on one keyboard by adjusting the controls below.
 
 The models where trained in this repository: https://github.com/Jim-Maar/marl-2vs2-soccer
+
+The game is playable at https://jim-maar.github.io/marl-2vs2-soccer-webapp/
