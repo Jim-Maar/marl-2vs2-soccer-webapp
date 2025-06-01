@@ -16,10 +16,10 @@ function App() {
     ControlType.AI1,   // Player 2 (Blue team, left)
     ControlType.AI1    // Player 3 (Blue team, right)
   ]);
-  
+
   // Ref to track previous isRunning state
   const prevIsRunningRef = useRef(isRunning);
-  
+
   // Add logging for isRunning state changes only when it actually changes
   useEffect(() => {
     if (prevIsRunningRef.current !== isRunning) {
@@ -27,7 +27,7 @@ function App() {
       prevIsRunningRef.current = isRunning;
     }
   }, [isRunning]);
-  
+
   // Handle control change
   const handleControlChange = useCallback((playerIndex: number, controlType: ControlType) => {
     setPlayerControls(prevControls => {
@@ -40,13 +40,13 @@ function App() {
       return newControls;
     });
   }, []);
-  
+
   // Handle start/stop game
   const handleStartStop = useCallback(() => {
     console.log('App: Start/Stop button clicked. Current isRunning:', isRunning);
     setIsRunning(prev => !prev);
   }, [isRunning]);
-  
+
   // Handle score update
   const handleScoreUpdate = useCallback((newScore: [number, number]) => {
     setScore(prevScore => {
@@ -57,21 +57,21 @@ function App() {
       return newScore;
     });
   }, []);
-  
+
   return (
     <div className="App">
       <div className="container">
         <Header />
-        
+
         <GameDescription />
-        
-        <ControlsMenu 
-          playerControls={playerControls} 
-          onControlChange={handleControlChange} 
+
+        <ControlsMenu
+          playerControls={playerControls}
+          onControlChange={handleControlChange}
           onStartStop={handleStartStop}
           isRunning={isRunning}
         />
-        
+
         <SoccerGame
           playerControls={playerControls}
           isRunning={isRunning}
